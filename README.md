@@ -124,26 +124,111 @@ _Dashboards display current freshness and data range so operators know when grap
 
 ## 2. Assumptions / Constraints & Design Methodology
 
-### 2.1 Workload & resource analysis
+### 2.1 Workload & Resource Analysis
 - **Peak population:** 1,000,000 CCU, ~even split across NA/EU/APAC.  
+  - *Why:* anchors shard counts, per‑region quotas, and AZ spread.  
+  - *Size/verify:* regional CCU telemetry or historical curves (assume 35/35/30 if unknown).  
+  - *Refs:* Google SRE “Monitoring Distributed Systems”.  
 - **Gameserver density:** ~200 CCU/server ⇒ ~5,000 servers (~1,700/region).  
+  - *Why:* converts CCU into hosts → exporter/series budgets & autoscaling units.  
+  - *Size/verify:* match sizes + CPU headroom per game mode; adjust after soak.  
+  - *Refs:* Brendan Gregg’s USE method.  
 - **Emission cadence:** 10 s steady; 5 s during incidents.  
-*(Refs: Google SRE “Monitoring Distributed Systems”; Brendan Gregg USE method.)*
+  - *Why:* smooth charts at low cost; bump resolution only when needed.  
+  - *Size/verify:* edge flags; exporter CPU < 1–2% at 5 s.  
+  - *Refs:* SRE guidance on practical overhead & user‑visible signals.
 
-### 2.2 Signal shapes
-- **Edge aggregation only:** counters + histograms (no per‑event series).  
+### 2.2 Signal Shapes
+- **Edge aggregation only:** counters + (exponential) histograms (no per‑event series).  
+  - *Why:* p95/p99 without per‑event explosion.  
+  - *Size/verify:* compare histogram quantiles vs. raw‑sample quantiles on a canary.  
+  - *Refs:* Prometheus histogram practices; OTel exponential histograms.  
 - **Strict label policy:** allow `{region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}`; forbid `{player_id, raw_ip, request_id, free‑text}`.  
-- **Series budget:** ≈300 active series/server.  
+  - *Why:* avoid high‑cardinality blowups & PII leaks.  
+  - *Size/verify:* CI lint + edge‑time reject; alert on series growth.  
+  - *Refs:* Prometheus naming & cardinality guides; Grafana guidance.  
+- **Series budget:** ≈ **300 active series/server**.  
+  - *Why:* linear scaling with fleet; predictable storage & query cost.  
+  - *Size/verify:* exporter self‑metric `active_series_total`; gate rollouts when > budget.  
 - **RED framing:** Rate, Errors, Duration for login → matchmaking → join.  
-*(Refs: Prometheus histogram practices, naming & cardinality guides; Grafana RED method.)*
+  - *Refs:* Tom Wilkie’s RED method.
 
-### 2.3 Ingestion & transport
-- **EPS math:** 5,000 × 300 ÷ 10 s ≈ **150k samples/s** (global) → **≥200k/s** target with headroom.  
-- **Burst posture:** Test 1×/3×/5×; backlog drains cleanly.  
-- **Backpressure order:** Shed non‑critical (verbose logs) first; protect gameplay SLIs.  
-*(Refs: Kafka/Kinesis tuning; SRE “Managing Load/Handling Overload”.)*
+### 2.3 Ingestion & Transport
+- **EPS math:** `5,000 servers × 300 series ÷ 10 s ≈ 150k samples/s (global)` → **plan ≥ 200k/s** target with headroom (≈50k/s per region).  
+  - *Why:* sizes ingest concurrency, WAL throughput, and broker partitions.  
+  - *Verify:* synthetic **1×/3×/5×** load; watch accept rate & WAL latency.  
+- **Burst posture:** test **1× / 3× / 5×** (baseline/patch/mass‑event).  
+  - *Why:* ensure spikes don’t cascade; backlog drains cleanly.  
+  - *Verify:* lag‑based throttling/backpressure; prove replay.  
+- **Backpressure order:** shed non‑critical (verbose logs) first; protect gameplay SLIs.  
+  - *Refs:* SRE “Managing Load” & “Handling Overload”; Kafka/Kinesis tuning notes.
 
----
+### 2.4 Storage & Retention
+- **Capacity math (metrics, hot):** at ~15–20 B/sample, `150k/s × 86,400 s = 12.96B samples/day` ⇒ **~200–260 GB/day global**; budget **~500 GB/day/region** (hot) incl. index/replicas.  
+  - *Why:* avoid surprise SSD/S3 bills; ensure compactions keep up.  
+- **Retention/tiers (metrics):** **10 s** for **7–14 d** (hot) → **1–5 m** for **30–90 d+** (warm) → **5 m / 1 h** to **≈13 mo** (cold, S3/Parquet).  
+  - *Why:* long horizons without runaway cost; queries auto‑pick rollups.  
+  - *Verify:* recording‑rules usage; query hit ratios; compactor/store‑gateway health.  
+- **Logs:** **7 d hot (indexed)** / **30 d warm** / **365 d cold (S3)**; tokenize PII at the edge.  
+  - *Why:* investigations & compliance without polluting the metrics store.  
+- **Advanced (when ready):** compactor sizing (bigger merged blocks), query sharding + result cache, remote‑write tuning, columnar cold formats for Athena/Presto.
+
+### 2.5 Query & Visualization
+- **Query SLOs:** **p95 ≤ 2 s** (≤12 h), **p99 ≤ 10 s** (7–30 d, downsampled).  
+  - *Why:* on‑call usability during incidents.  
+  - *Verify:* precompute rollups; cap range vectors; cache; throttle costly queries.  
+- **Dashboard standards:** Golden Signals per service (latency/traffic/errors/saturation) + gameplay SLIs.  
+  - *Why:* standard triage surface; operator muscle memory.
+
+### 2.6 SLOs & Freshness
+- **Freshness (write→read):** **p99 ≤ 10 s**.  
+  - *Why:* dashboards reflect reality quickly; guides flush/compaction policy.  
+  - *Verify:* `ingest_to_query_age_seconds` histogram + burn‑rate alerts.  
+- **Ingest TTFB:** **p99 ≤ 250–350 ms @ 1×–3×**.  
+  - *Why:* early warning for queueing/TLS/connect issues.  
+  - *Verify:* client timers + server logs; alert on sustained drift.  
+- **Optional reporting add‑ons:**  
+  - Data completeness SLO: **≥99.9%** of expected time series present per 5‑min window.  
+  - Dashboard staleness indicator: show current write→read age + data time range on each board.
+
+### 2.7 Tenancy & Quotas
+- **Policy:** split EPS by `{region, tenant}`; enforce quotas at edge → broker → ingesters → queriers; on exceed, **HTTP 429 + Retry‑After**; degrade non‑critical classes first.  
+  - *Why:* noisy‑neighbor isolation; predictable capacity.  
+- **Resource controls:** priorities (shares/weights) and limits (bandwidth/ceilings) per CPU/memory/disk I/O/network; qdiscs/BPF for shaping.  
+- **Cardinality controls:** per‑tenant **series** & **samples/s** limits; dashboards for series growth; CI lint to block forbidden labels.  
+  - *Why:* prevent TSDB blow‑ups; complements OS‑level fairness.
+
+### 2.8 Security & Compliance (Essentials)
+- **Privacy by design:** no PII in metrics (schema allowlist + CI lints + runtime rejection); treat logs as sensitive; tokenize at collection.  
+- **Defense in depth:** isolate by tenant + region (logical IDs + physical S3 prefixes/buckets; per‑env KMS keys).  
+- **Fail‑safe defaults:** drop unknown labels/fields; deny on missing auth; short‑lived creds/certs.  
+- **Provable controls:** violations alert; admin/API actions are tamper‑evident (WORM S3).  
+- **Operational simplicity:** IAM/KMS‑managed primitives; immutable, signed images; SSH disabled (SSM only).  
+- **Day‑1 controls checklist:** label allowlist; mTLS agent↔collector↔broker↔store; per‑tenant scopes; KMS at rest; private subnets/WAF/strict SGs; secrets in SM/PS w/ ≤90‑day rotation; documented retention & deletion.
+
+### 2.9 Capacity Tests (Pass/Fail Gates)
+**Goal:** convert assumptions into verifiable gates using production‑like label sets & histogram buckets.
+
+| Test | Why | Setup | Pass / Fail |
+|---|---|---|---|
+| **T0: Env parity & canary** | Proves config/image parity before heavy tests | 1% traffic mirror; canary tenant with real labels | **Pass:** parity dashboards all green; no policy rejects. **Fail:** any reject or >1% divergence |
+| **T1: Ingest soak (≥1.3×)** | Verifies write path capacity & durability | Synthetic producers push **≥200k samples/s global** for 2–6 h | **Pass:** zero loss; write→read p95 < 30 s, p99 ≤ 10 s; WAL replay < 5 min. **Fail:** drops/WAL stall/SLO breach |
+| **T2: Burst (1×/3×/5×)** | Patch/match‑start resilience | 15‑min bursts to 1× / 3× / 5× baseline with realistic label churn | **Pass:** backpressure engages; backlog drains < 30 min; no core SLI loss. **Fail:** core SLI loss/backlog plateau |
+| **T3: Query load** | Operator UX under pressure | ~200 concurrent viewers; mixed ranges (≤12 h and 7–30 d) | **Pass:** p95 ≤ 2 s (≤12 h), p99 ≤ 10 s (7–30 d); cache hit ≥ 80%. **Fail:** cache thrash/misses |
+| **T4: Chaos (AZ/broker loss)** | Fault‑tolerance & recovery | Kill one AZ worth of ingesters/queriers or a broker node | **Pass:** zero data loss; freshness recovers < 2 min. **Fail:** gaps/prolonged staleness |
+| **T5: Backpressure & replay** | Durability and orderly catch‑up | Pause stream partitions 10–20 min; resume | **Pass:** buffer + prioritized shed; clean catch‑up; no out‑of‑order explosions. **Fail:** dead‑letter growth/lag stuck |
+| **T6: Data completeness** | “Are we seeing all expected series?” | Tenant emits known count of series (±1%) per shard | **Pass:** ≥99.9% present per 5‑min window. **Fail:** sustained missing‑series |
+| **T7: Cardinality guard** | Prevent index/WAL blow‑ups | Introduce “bad” metric (forbidden label) in staging | **Pass:** edge reject + alert ≤ 1 min; 0 new store series. **Fail:** any acceptance |
+| **T8: Cost/SLO guardrails** | Ensure scaling tracks outcomes | Scale during T1–T3 | **Pass:** autoscaling driven by freshness / query p95 / cache hit; object‑store ops/query within budget. **Fail:** SLO breach during scale |
+
+**Run order:** T0 → T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 (overlapping where practical).  
+**Artifacts:** dashboards (freshness, accept rate, compactor lag, cache hit, query durations), producer sent/ack counts, 429/Retry‑After stats, limits snapshot, chaos notes.
+
+> **Notes that keep you honest**  
+> • Data shape matters: always use real label sets & histogram buckets in load gen.  
+> • Measure at user boundaries: dashboard timers + write→read age are the truth.  
+> • Scale to SLOs, not utilization: autoscaling inputs are freshness, query p95, cache hit.  
+> • Time‑box soak: min **2 h**, ideal **6 h**, to expose compaction/GC/eviction cycles.---
 
 ## 3. Storage & Retention
 
