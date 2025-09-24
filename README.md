@@ -206,6 +206,27 @@ _Dashboards display current freshness and data range so operators know when grap
 - **Operational simplicity:** IAM/KMS‑managed primitives; immutable, signed images; SSH disabled (SSM only).  
 - **Day‑1 controls checklist:** label allowlist; mTLS agent↔collector↔broker↔store; per‑tenant scopes; KMS at rest; private subnets/WAF/strict SGs; secrets in SM/PS w/ ≤90‑day rotation; documented retention & deletion.
 
+### 2.8.1 Principles
+- **No PII in metrics** (enforced at edge).  
+- **Tokenize/redact logs** at collection.  
+- **mTLS everywhere; KMS at rest; least‑privilege IAM**.  
+- **Immutable images; signed artifacts; SSH disabled (SSM only)**.  
+- **Audit logs to S3 object‑lock** (WORM).
+
+### 2.8.2 Day‑1 Controls (checklist)
+- Label allowlist & edge reject.  
+- mTLS agent↔collector↔broker↔store (short‑lived certs).  
+- Per‑tenant auth scopes/RBAC.  
+- KMS keys per environment (per‑tenant optional).  
+- Private subnets/WAF/strict SGs.  
+- Secrets in SM/PS; rotation ≤90 d.  
+- Retention & deletion process documented.  
+- Residency stance (e.g., default CA regions; replication policy).
+
+### 2.8.3 Minimal framework alignment
+- **NIST 800‑53 / ISO 27001:** Access control, Identification & Auth, System & Communications Protection, Audit & Accountability, Config Mgmt.  
+- **BC FOIPPA (if applicable):** default telemetry to Canada regions; document any cross‑border replication and compensating controls.
+
 ### 2.9 Capacity Tests (Pass/Fail Gates)
 **Goal:** convert assumptions into verifiable gates using production‑like label sets & histogram buckets.
 
@@ -229,72 +250,6 @@ _Dashboards display current freshness and data range so operators know when grap
 > • Measure at user boundaries: dashboard timers + write→read age are the truth.  
 > • Scale to SLOs, not utilization: autoscaling inputs are freshness, query p95, cache hit.  
 > • Time‑box soak: min **2 h**, ideal **6 h**, to expose compaction/GC/eviction cycles.---
-
-## 3. Storage & Retention
-
-- At **~15–20 B/sample**, **150k/s × 86,400 ≈ 12.96B samples/day** → **~200–260 GB/day global (hot)**.  
-- **Plan ~500 GB/day/region (hot)** incl. index/replicas to ensure compactions keep up.  
-- **Tiering:** 10s for 7–14 d (hot) → 1–5 m for 30–90 d (warm; up to 180+ d) → 5 m/1 h for ~13 mo (cold on S3/Parquet).  
-- **Logs:** 7 d hot (indexed) / 30 d warm / 365 d cold; tokenize PII at edge.
-
-**Basics (references to implement later):**  
-- Prometheus histograms & quantiles; Prometheus storage model (blocks/WAL/retention); Mimir store‑gateway/bucket index; SRE Golden Signals.  
-
-**Advanced (when ready):**  
-- Bigger merged blocks via compactor; query sharding + result cache; histogram strategy; remote‑write tuning.
-
----
-
-## 4. Query & Visualization
-
-- **Query SLOs:** p95 ≤ 2 s (≤12 h), p99 ≤ 10 s (7–30 d).  
-- **Enablers:** recording rules; caching; query limits; cap range vectors; throttle costly queries.  
-- **Dashboards:** Golden Signals per service; gameplay SLIs; infra/network health; cost & storage (bytes/day by tier, cache hit, read amplification).  
-*(Refs: AMP query insights/controls & costs.)*
-
----
-
-## 5. SLOs & Freshness
-
-- **Ingest TTFB:** p99 ≤ 250–350 ms @ 1×–3×.  
-- **Freshness (write→read):** p99 ≤ 10 s.  
-- **Add‑ons:** Data completeness SLO (≥99.9% series present/5 min); dashboard staleness indicator.  
-*(Refs: Gregg, Systems Performance 2e — timing/visualization chapters.)*
-
----
-
-## 6. Tenancy, Quotas & Fairness
-
-- **Tenant model:** teams/titles defined; per‑tenant quotas (EPS, samples/s, max series, query limits).  
-- **Enforcement points:** edge → stream → ingesters → query‑frontend; overage ⇒ **HTTP 429 + Retry‑After**.  
-- **Cardinality guard:** dashboards + kill switches; CI lints schema.  
-- **OS/infra controls:** CPU shares/bandwidth; memory soft/hard limits; blkio weights & throttles; qdiscs/BPF for network shaping.  
-*(Ref: Gregg 2e — OS virtualization & resource controls.)*
-
----
-
-## 7. Security & Compliance (Essentials)
-
-### 7.1 Principles
-- **No PII in metrics** (enforced at edge).  
-- **Tokenize/redact logs** at collection.  
-- **mTLS everywhere; KMS at rest; least‑privilege IAM**.  
-- **Immutable images; signed artifacts; SSH disabled (SSM only)**.  
-- **Audit logs to S3 object‑lock** (WORM).
-
-### 7.2 Day‑1 Controls (checklist)
-- Label allowlist & edge reject.  
-- mTLS agent↔collector↔broker↔store (short‑lived certs).  
-- Per‑tenant auth scopes/RBAC.  
-- KMS keys per environment (per‑tenant optional).  
-- Private subnets/WAF/strict SGs.  
-- Secrets in SM/PS; rotation ≤90 d.  
-- Retention & deletion process documented.  
-- Residency stance (e.g., default CA regions; replication policy).
-
-### 7.3 Minimal framework alignment
-- **NIST 800‑53 / ISO 27001:** Access control, Identification & Auth, System & Communications Protection, Audit & Accountability, Config Mgmt.  
-- **BC FOIPPA (if applicable):** default telemetry to Canada regions; document any cross‑border replication and compensating controls.
 
 ---
 
