@@ -1,4 +1,4 @@
-# Reporting & Observability Platform (AWS) — DESIGN.md
+# Reporting & Observability Platform (AWS)
 
 **Purpose:** Define scope, design, build, implementation, and operations for a metrics/logs/tracing platform capable of supporting ~**1,000,000** concurrent clients with low‑latency reporting.
 
