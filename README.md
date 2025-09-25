@@ -239,12 +239,10 @@ From the series budget we derive ~150k samples/s global (~50k/s/region) and size
 - **Burst posture:** test **1× / 3× / 5×** (baseline/patch/mass‑event).  
   - *Why:* ensure spikes don’t cascade; backlog drains cleanly.  
   - *Verify:* lag‑based throttling/backpressure; prove replay.
-  *Source:*
-  - [Kafka performance tuning — tips & best practices (AutoMQ wiki)](https://github.com/AutoMQ/automq/wiki/Kafka-Performance-Tuning%3A-Tips-%26-Best-Practices)
+  *Source:* - [Kafka performance tuning — tips & best practices (AutoMQ wiki)](https://github.com/AutoMQ/automq/wiki/Kafka-Performance-Tuning%3A-Tips-%26-Best-Practices)
 
 - **Backpressure order:** shed non‑critical (verbose logs) first; protect gameplay SLIs.  
-  *Sources:*  
-  - [SRE Workbook — Managing Load](https://sre.google/workbook/managing-load/) - [SRE Book — Handling Overload](https://sre.google/sre-book/handling-overload/)
+  *Sources:* - [SRE Workbook — Managing Load](https://sre.google/workbook/managing-load/) - [SRE Book — Handling Overload](https://sre.google/sre-book/handling-overload/)
 
 
 ### 2.4 Storage & Retention
