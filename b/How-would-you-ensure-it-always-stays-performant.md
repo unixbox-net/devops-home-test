@@ -17,3 +17,18 @@ exporters:
     external_labels: { region: ${REGION}, build_id: ${BUILD_ID} }
 ```
 - Server histograms: prefer OTel exponential or Prom histogram with ~12–16 buckets per decade to keep payloads small and quantiles accurate.
+
+##  Bound cardinality — Schema + enforcement
+-  Allowlist only: {region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}.
+-  Edge rejects: drop samples containing {player_id, raw_ip, email, request_id, free_text}.
+-  CI lint (example):
+```yaml
+rules:
+  - forbid_labels: [player_id, ip, email, request_id]
+  - allow_labels:  [region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket]
+  - max_series_per_host: 300
+```
+Gateway enforcement (ADOT/Mimir RW-gateway):
+-  Per-tenant limits: max_series, samples_per_second, max_label_names, max_label_value_length.
+-  On exceed: return 429 with Retry-After; emit tenant_over_limit_total.
+
