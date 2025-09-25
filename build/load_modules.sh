@@ -1,8 +1,8 @@
 #!/bin/bash
 # Loads and sources modules from manifest.json
 
-MODULE_PATH="/root/base/modules"
-MANIFEST="/root/base/manifest.json"
+MODULE_PATH="/root/devops-home-test/build/modules"
+MANIFEST="/root/devops-home-test/build/manifest.json"
 
 echo "[INFO] Loading modules from manifest.json..."
 

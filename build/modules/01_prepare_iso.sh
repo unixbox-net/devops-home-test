@@ -1,11 +1,11 @@
 #!/bin/bash
 # MODULE 1: Prepare ISO structure and mount base image
 set -euo pipefail
-source "/root/base/lib/env.sh"
+source "/root/devops-home-test/build/lib/env.sh"
 
 
 log "[*] [Module 1] Preparing ISO and darksite directories..."
-ISO_ORIG="/root/debian-12.10.0-amd64-netinst.iso"
+ISO_ORIG="/root/debian-13.1.0-amd64-netinst.iso"
 BUILD_DIR="/root/debian-iso"
 CUSTOM_DIR="$BUILD_DIR/custom"
 MOUNT_DIR="/mnt/iso"

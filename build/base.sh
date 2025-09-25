@@ -11,11 +11,11 @@
 # currently limited to a single host.
 
 set -euo pipefail
-source "/root/base/lib/env.sh"
-source "/root/base/lib/utils.sh"
+source "/root/devops-home-test/build/lib/env.sh"
+source "/root/devops-home-test/build/lib/utils.sh"
 
 # === Globals ===
-MODULE_DIR="/root/base/modules"
+MODULE_DIR="/root/devops-home-test/build/modules"
 VMID="${1:-}"
 
 # === Early sanity checks ===
@@ -23,9 +23,9 @@ VMID="${1:-}"
 [[ $(id -u) -ne 0 ]] && error_exit "This script must be run as root."
 command -v xorriso >/dev/null || error_exit "Missing xorriso. Run: apt install xorriso"
 command -v jq >/dev/null || error_exit "Missing jq. Run: apt install jq"
-[[ ! -f /root/debian-12.10.0-amd64-netinst.iso ]] && error_exit "Base ISO missing."
+[[ ! -f /root/debian-13.1.0-amd64-netinst.iso ]] && error_exit "Base ISO missing."
 
 # === Load all modules as defined in manifest ===
-source "/root/base/load_modules.sh"
+source "/root/devops-home-test/build/load_modules.sh"
 
 log "[✓] All tasks completed successfully."
