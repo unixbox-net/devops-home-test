@@ -1,5 +1,5 @@
 # JP Evening Latency — End-to-End Troubleshooting Methodology
-**how I troubleshoot**, the **question-first (W’s) method**, the **Fishbone (Ishikawa) model**, and concrete **examples** using userland tools, custom diagnostic scripts, and **in‑kernel** instrumentation (eBPF/DTrace). This file doubles as a living playbook and a copy‑paste command sheet._
+**How I troubleshoot**, the **question-first (W’s) method**, the **Fishbone (Ishikawa) model**, and concrete **examples** using userland tools, custom diagnostic scripts, and **in‑kernel** instrumentation (eBPF/DTrace). This file doubles as a living playbook and a copy‑paste command sheet._
 
 ---
 
