@@ -16,3 +16,4 @@ exporters:
     tls: { insecure: false }
     external_labels: { region: ${REGION}, build_id: ${BUILD_ID} }
 ```
+- Server histograms: prefer OTel exponential or Prom histogram with ~12–16 buckets per decade to keep payloads small and quantiles accurate.
