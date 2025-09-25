@@ -45,20 +45,43 @@ _A single, self‑contained Markdown that **answers the specific case questions*
 
 ---
 
-## 1) The W’s — Question‑First Intake (Full Checklist)
-Document answers in an **evidence log** (timestamps, commands, artifact hashes). Don’t proceed without clarity.
+## 1) Step Back: The W’s (Full Question Bank)
+Capture answers in an **evidence log** (timestamps, commands, artifact hashes). Do not proceed until the scope is unambiguous.
 
-**Who** — impacted players (#/%, ISPs/ASNs e.g., NTT/KDDI/SoftBank), any VIP/pro users, initial reporters/channels, owners/approvers (matchmaking policy, provider contracts).  
-**What** — degraded signals (**RTT**, **jitter**, **loss**, timeouts, rubber‑banding), platforms (PC/console/mobile), server regions (Tokyo/Osaka/backup), recent changes (deploys, drivers, scrubbing, BGP/peering), mitigations tried + results.  
-**When** — JST window (e.g., **19:00–24:00**), first‑seen date, nightly vs intermittent, controls (JP mornings; KR/TW evenings).  
-**Where** — player prefecture/city; server DC/AZ/rack/TOR; path hop/ASN/IX where degradation begins.  
-**Why** — initial hypotheses: eyeball congestion/peering; scrubbing hairpin; host saturation (softirq/IRQ/NIC/NUMA); capacity overflow; routing diffs (v4≠v6/BGP); app stalls; DNS/geo mis‑steer; change regression.  
-**How** — matchmaking policy; current telemetry; access model (shell/bastion); explicit SLIs/SLOs for validation.
+### 1.1 Who
+- Who is impacted (player count, % of active JP users)? Specific ISPs (NTT/KDDI/SoftBank ASNs)? VIP/pro players?
+- Who reported first (tickets/Discord/social)? Case/incident IDs?
+- Who owns matchmaking/policy? Who owns DC/provider contracts? Who can approve mitigations (routing, scaling, scrubbing changes)?
 
-> **Deliverable:** 1‑page W’s summary attached to the evidence log.
+### 1.2 What
+- What exactly is degraded? **RTT, jitter, packet loss, rubber‑banding, timeouts**?
+- What platforms (PC/console/mobile), game versions/builds?
+- What server pools/regions are used (Tokyo/Osaka/backup regions)?
+- What changed recently (deploys, config, OS/driver updates, DDoS policy, BGP/peering)?
+- What mitigations tried already? Results?
+
+### 1.3 When
+- When does it occur (JST), start/end times, weekdays vs. weekends, event spikes?
+- When did it start (first day seen)? Does it recur nightly or intermittently?
+- When are **controls** clean (JP mornings, KR/TW evenings)?
+
+### 1.4 Where
+- Where are players (prefecture/city)?
+- Where are servers (DC/AZ/rack/TOR)?
+- Where in the path does degradation begin (hop index, ASN, IX name)?
+
+### 1.5 Why (Initial hypotheses)
+- Prime‑time **eyeball congestion/peering**; **DDoS scrubbing** hairpin; **host saturation** (softirq/IRQ/NIC/NUMA); **capacity/matchmaking overflow**; **routing changes** (BGP/IPv4≠IPv6); **application stalls**; **DNS/geo** mis‑steer; **recent change** regression.
+
+### 1.6 How (Mechanics & validation)
+- How are players matched to servers (geo/IP/DNS/latency)?
+- How is telemetry gathered today (RUM, logs, probes)?
+- How do we access servers (shell/bastion/read‑only)? OS/kernel?
+- How will we validate a fix (explicit SLIs/SLOs, acceptance criteria)?
+
+> **Deliverable:** A 1‑page intake summary answering the W’s, attached to the evidence log.
 
 ---
-
 ## 2) Access & Environment Discovery
 - **Shell access** (root/sudo/read‑only) via bastion? OS & kernel versions.  
 - **Cloud**: provider/instance families, **CPU steal/throttle** visibility, ENA/SR‑IOV, accelerators (Anycast/Global Accelerator).  
