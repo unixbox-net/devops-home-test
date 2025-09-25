@@ -4,6 +4,71 @@
 
 ---
 
+## Table of Contents
+
+- [Document Control](#document-control)
+- [Executive Summary — 1M-CCU Metrics & Reporting Platform (AWS)](#executive-summary--1m-ccu-metrics--reporting-platform-aws)
+  - [Assumptions that shape the design](#assumptions-that-shape-the-design)
+  - [What data the cluster holds](#what-data-the-cluster-holds)
+  - [How it stays performant (by construction)](#how-it-stays-performant-by-construction)
+  - [Technologies (AWS-native, with escape hatches)](#technologies-aws-native-with-escape-hatches)
+  - [Retention & cost posture (simple, defensible)](#retention--cost-posture-simple-defensible)
+  - [SLOs that keep us honest](#slos-that-keep-us-honest)
+  - [How we prove 1M CCU readiness (acceptance gates)](#how-we-prove-1m-ccu-readiness-acceptance-gates)
+  - [Rationale & trade-offs](#rationale--trade-offs)
+  - [Risks & mitigations](#risks--mitigations)
+- [1. Scope & Non-Goals](#1-scope--non-goals)
+  - [1.1 In Scope](#11-in-scope)
+  - [1.2 Out of Scope (see Improvements)](#12-out-of-scope-see-improvements)
+  - [1.3 Improvements Roadmap (90/180/365-day)](#13-improvements-roadmap-90180365-day)
+- [2. Assumptions / Constraints & Design Methodology](#2-assumptions--constraints--design-methodology)
+  - [2.1 Workload & Resource Analysis](#21-workload--resource-analysis)
+  - [2.2 Signal Shapes](#22-signal-shapes)
+  - [2.3 Ingestion & Transport](#23-ingestion--transport)
+  - [2.4 Storage & Retention](#24-storage--retention)
+  - [2.5 Query & Visualization](#25-query--visualization)
+  - [2.6 SLOs & Freshness](#26-slos--freshness)
+  - [2.7 Tenancy & Quotas](#27-tenancy--quotas)
+  - [2.8 Security & Compliance (Essentials)](#28-security--compliance-essentials)
+    - [2.8.1 Principles](#281-principles)
+    - [2.8.2 Day-1 Controls (checklist)](#282-day-1-controls-checklist)
+    - [2.8.3 Minimal framework alignment](#283-minimal-framework-alignment)
+  - [2.9 Capacity Tests (Pass/Fail Gates)](#29-capacity-tests-passfail-gates)
+- [8. Architecture (AWS)](#8-architecture-aws)
+  - [8.1 Components & AWS Services](#81-components--aws-services)
+  - [8.2 Data Flow (high level)](#82-data-flow-high-level)
+- [9. Capacity & Storage Planning](#9-capacity--storage-planning)
+  - [9.1 Ingest & Storage](#91-ingest--storage)
+  - [9.2 Retention (fill with final choices)](#92-retention-fill-with-final-choices)
+  - [9.3 S3 Lifecycle (concept)](#93-s3-lifecycle-concept)
+- [10. SLOs, Alerts & Dashboards](#10-slos-alerts--dashboards)
+  - [10.1 SLOs](#101-slos)
+  - [10.2 Alert Policy (examples to instantiate)](#102-alert-policy-examples-to-instantiate)
+  - [10.3 Dashboard Standards (add links/screens later)](#103-dashboard-standards-add-linksscreens-later)
+- [11. Tenancy, Quotas & Fairness](#11-tenancy-quotas--fairness)
+- [12. Security & Compliance (Essentials)](#12-security--compliance-essentials)
+  - [12.1 Principles (recap)](#121-principles-recap)
+  - [12.2 Day-1 Checklist](#122-day-1-checklist)
+- [13. Build & Implementation Plan](#13-build--implementation-plan)
+  - [13.1 Environments](#131-environments)
+  - [13.2 Delivery Milestones (fill dates)](#132-delivery-milestones-fill-dates)
+  - [13.3 RACI (example)](#133-raci-example)
+- [14. Operations](#14-operations)
+  - [14.1 Runbooks (link/add later)](#141-runbooks-linkadd-later)
+  - [14.2 SRE On-call](#142-sre-on-call)
+  - [14.3 Change Management](#143-change-management)
+- [15. Capacity Tests & Readiness Gates](#15-capacity-tests--readiness-gates)
+- [16. Cost & FinOps (initial)](#16-cost--finops-initial)
+- [17. Risks & Mitigations](#17-risks--mitigations)
+- [18. Open Questions](#18-open-questions)
+- [19. Appendices (to attach later)](#19-appendices-to-attach-later)
+- [20. Improvements Adornment (reference-only, out of scope for Day-1)](#20-improvements-adornment-reference-only-out-of-scope-for-day-1)
+  - [20.1 Immutable Golden Images (deterministic rollouts)](#201-immutable-golden-images-deterministic-rollouts)
+  - [20.2 Cilium + Hubble & eBPF summaries](#202-cilium--hubble--ebpf-summaries)
+  - [20.3 Firecracker microVM sidecars (agent isolation)](#203-firecracker-microvm-sidecars-agent-isolation)
+
+---
+
 ## Document Control
 - **Owner:** Anthony Carpenter  
 - **Version / Date:** v1.0 — 2025‑09‑24  
@@ -13,7 +78,7 @@
 
 ---
 
-## Executive Summary — 1M‑CCU Metrics & Reporting Platform (AWS)
+## Executive Summary — 1M-CCU Metrics & Reporting Platform (AWS)
 
 Design and operate a metrics cluster that ingests and visualizes gameplay and platform telemetry for a title peaking at **1,000,000 CCU**, split roughly NA/EU/APAC. The goal is **player‑centric observability**: dashboards that reflect reality fast enough to diagnose and fix incidents while keeping **cost and cardinality predictable** at scale.
 
@@ -37,7 +102,7 @@ Design and operate a metrics cluster that ingests and visualizes gameplay and pl
 5. **SLO‑driven backpressure.** Quotas at edge→broker→ingesters→queriers; shed non‑critical classes first (e.g., verbose logs).  
 6. **Security & tenancy.** Per‑team tenants/quotas; TLS/KMS; PII‑free metrics.
 
-### Technologies (AWS‑native, with escape hatches)
+### Technologies (AWS-native, with escape hatches)
 - **Agents:** Prometheus node exporter + custom gameplay exporter; **ADOT Collector** (batch/retry/TLS/remote_write); **Fluent Bit** (logs).  
 - **Ingestion & archive:** **Kinesis Data Streams** (or **Amazon MSK**). **Firehose** → **OpenSearch** (hot logs) & **S3** (archives).  
 - **Metrics store (per region):** **Amazon Managed Service for Prometheus (AMP)** *or* **Grafana Mimir on EKS** (S3‑backed, multi‑tenancy controls).  
@@ -66,7 +131,7 @@ _Dashboards display current freshness and data range so operators know when grap
 - **Replay:** Pause stream partitions **10–20 min**; clean catch‑up, no out‑of‑order blowups.  
 - **Cost/SLO guardrails:** Autoscale on **freshness/query p95/cache hit**, not CPU; object‑store ops/query within budget.
 
-### Rationale & trade‑offs
+### Rationale & trade-offs
 - **Prometheus‑compatible, object‑store‑backed TSDB** (AMP/Mimir) fits low‑cardinality, high‑throughput metrics with PromQL ubiquity.  
 - **Edge histograms** preserve p95/p99 accuracy with tiny payloads and bounded series; avoids per‑event firehoses & PII risk.  
 - **Streaming buffer** (Kinesis/MSK) is critical for bursts, replay, and multi‑sink fan‑out without coupling game servers to TSDB internals.  
@@ -82,7 +147,7 @@ _Dashboards display current freshness and data range so operators know when grap
 
 ---
 
-## 1. Scope & Non‑Goals
+## 1. Scope & Non-Goals
 
 ### 1.1 In Scope
 - Metrics ingestion, storage, query, dashboards  
@@ -99,7 +164,7 @@ _Dashboards display current freshness and data range so operators know when grap
 - Fully managed APM with code profiling (future)  
 - Deep eBPF network controls (future)  
 
-### 1.3 Improvements Roadmap (90/180/365‑day)
+### 1.3 Improvements Roadmap (90/180/365-day)
 **90 days (low risk, high ROI)**  
 - Recording‑rule catalog v1 (standard p95/p99 rollups per service).  
 - Query budgets & slow‑query killer (protect caches during incidents).  
@@ -213,7 +278,7 @@ _Dashboards display current freshness and data range so operators know when grap
 - **Immutable images; signed artifacts; SSH disabled (SSM only)**.  
 - **Audit logs to S3 object‑lock** (WORM).
 
-### 2.8.2 Day‑1 Controls (checklist)
+### 2.8.2 Day-1 Controls (checklist)
 - Label allowlist & edge reject.  
 - mTLS agent↔collector↔broker↔store (short‑lived certs).  
 - Per‑tenant auth scopes/RBAC.  
@@ -249,7 +314,7 @@ _Dashboards display current freshness and data range so operators know when grap
 > • Data shape matters: always use real label sets & histogram buckets in load gen.  
 > • Measure at user boundaries: dashboard timers + write→read age are the truth.  
 > • Scale to SLOs, not utilization: autoscaling inputs are freshness, query p95, cache hit.  
-> • Time‑box soak: min **2 h**, ideal **6 h**, to expose compaction/GC/eviction cycles.---
+> • Time‑box soak: min **2 h**, ideal **6 h**, to expose compaction/GC/eviction cycles.
 
 ---
 
@@ -332,7 +397,7 @@ _Dashboards display current freshness and data range so operators know when grap
 ### 12.1 Principles (recap)
 - No PII in metrics; tokenize logs at collection; mTLS; KMS; least privilege; immutable & signed images; audit logs to S3 WORM.
 
-### 12.2 Day‑1 Checklist
+### 12.2 Day-1 Checklist
 - [ ] Label allowlist & edge reject in exporters/collectors  
 - [ ] mTLS chain (agents↔collectors↔brokers↔stores), short‑lived certs  
 - [ ] Per‑tenant scopes & RBAC in gateway/store  
@@ -380,7 +445,7 @@ _Dashboards display current freshness and data range so operators know when grap
 - AZ/broker failure  
 - Data loss suspected
 
-### 14.2 SRE On‑call
+### 14.2 SRE On-call
 - **Coverage model:** _(fill)_  
 - **Escalation path:** _(fill)_  
 - **Status comms:** Slack / Email / StatusPage
@@ -457,7 +522,7 @@ _Dashboards display current freshness and data range so operators know when grap
 
 ---
 
-## 20. Improvements Adornment (reference‑only, out of scope for Day‑1)
+## 20. Improvements Adornment (reference-only, out of scope for Day-1)
 
 ### 20.1 Immutable Golden Images (deterministic rollouts)
 - Pre‑baked OS images with exporters/ADOT/Fluent Bit, SBOMs, signatures, read‑only FS, cloud‑init last‑mile.  
