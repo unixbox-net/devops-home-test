@@ -1,11 +1,19 @@
 {
   "modules": [
-    { "id": "01", "file": "01_prepare_iso.sh", "desc": "Mount ISO and create working darksite dir" },
-    { "id": "02", "file": "02_postinstall.sh", "desc": "Write postinstall.sh and bootstrap.service" },
-    { "id": "03", "file": "03_build_artifacts.sh", "desc": "Clone repos, build, and store debs in aptrepo" },
-    { "id": "04", "file": "04_preseed_config.sh", "desc": "Write preseed.cfg to ISO" },
-    { "id": "05", "file": "05_rebuild_iso.sh", "desc": "Compile new ISO using xorriso" },
-    { "id": "06", "file": "06_proxmox_finalize.sh", "desc": "Upload to Proxmox and convert to template" },
-    { "id": "07", "file": "07_finalize_template.sh", "desc": "Finishes template and shuts down vm" }
-  ]
+    { "name": "01-mk-darksite",            "enabled": true,  "on_error": "fail" },
+    { "name": "02-mk-darksite-iso",        "enabled": true,  "on_error": "fail" },
+    { "name": "03-master-content",         "enabled": true,  "on_error": "fail" },
+    { "name": "03-slave-content",          "enabled": true,  "on_error": "fail" },
+    { "name": "04-pack-firecracker",       "enabled": true,  "on_error": "fail" },
+    { "name": "05-pack-grafana-stack",     "enabled": true,  "on_error": "continue" },
+    { "name": "06-postinstall-master",     "enabled": true,  "on_error": "fail" },
+    { "name": "06-postinstall-slave",      "enabled": true,  "on_error": "fail" },
+    { "name": "07-first-boot-unit",        "enabled": true,  "on_error": "fail" },
+    { "name": "08-proxmox-template-finalize","enabled": false, "on_error": "continue" }
+  ],
+  "env_overrides": {
+    "03-master-content": { "MASTER_IP": "10.100.10.33", "MASTER_FQDN": "master.unixbox.net" },
+    "06-postinstall-master": { "ROLE": "master" },
+    "06-postinstall-slave":  { "ROLE": "slave" }
+  }
 }
