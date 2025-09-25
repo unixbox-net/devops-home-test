@@ -65,14 +65,14 @@ VMNAME="${VMNAME:-k8s}"         # base name (will be cleaned)
 # --- One-shot installer toggle (Proxmox only) ---
 # ONE_SHOT=true  -> create one VM, install, start it; NO template or clones; no "-template" suffix.
 # BOOT_ONLY=true -> alias for ONE_SHOT.
-ONE_SHOT="${ONE_SHOT:-${BOOT_ONLY:-false}}"
+ONE_SHOT="${ONE_SHOT:-${BOOT_ONLY:-true}}"
 
 # Template-only flag (legacy behavior). Ignored if ONE_SHOT=true.
 TEMPLATE_ONLY="${TEMPLATE_ONLY:-false}"
 
 # Salt master (central control + logs + inventory orchestrator)
 SALT_ENABLE="${SALT_ENABLE:-true}"
-SALT_MASTER="${SALT_MASTER:-salt.unixbox.net}"
+SALT_MASTER="${SALT_MASTER:-master.unixbox.net}"
 SALT_MINION_ID="${SALT_MINION_ID:-}"       # optional; default hostname if empty
 
 # WireGuard (optional)
@@ -128,7 +128,7 @@ NAMESERVER="${NAMESERVER:-10.100.10.2 10.100.10.3 1.1.1.1 8.8.8.8}"
 USE_CLOUD_INIT="${USE_CLOUD_INIT:-true}"
 CLONE_VLAN_ID="${CLONE_VLAN_ID:-}"
 
-NUM_CLONES="${NUM_CLONES:-3}"
+NUM_CLONES="${NUM_CLONES:-0}"
 BASE_CLONE_VMID="${BASE_CLONE_VMID:-3000}"
 BASE_CLONE_IP="${BASE_CLONE_IP:-$STATIC_IP}"
 CLONE_MEMORY_MB="${CLONE_MEMORY_MB:-4096}"
