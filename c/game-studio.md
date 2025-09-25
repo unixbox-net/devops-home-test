@@ -1,4 +1,4 @@
-# C. You are working with a Game Studio that has received player reports from their Japanese players stating that during the evening their latency is much higher than usual, affecting their match quality. How do you go about confirming the issue and working with the game server provider to resolve it?
+### C. You are working with a Game Studio that has received player reports from their Japanese players stating that during the evening their latency is much higher than usual, affecting their match quality. How do you go about confirming the issue and working with the game server provider to resolve it?
 
 -  Extra info:
     -  i. You know that their gameservers are hosted by a third party which does not have good metrics and visibility
