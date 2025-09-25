@@ -410,12 +410,15 @@ Next Step:
 histogram_quantile(0.95, sum(rate(game_rtt_ms_bucket{region="jp"}[5m])) by (le, hour, isp))
 ```
 
-### 8.3 Your Tool Links (insert your repos)
-- `udp_rtt_buckets.bpf` → **[ADD_LINK_HERE]**
-- `nicq_watch.bpf` → **[ADD_LINK_HERE]**
-- `tick_drift_probe.bpf` → **[ADD_LINK_HERE]**
-- `paris_mtr_cron.sh` → **[ADD_LINK_HERE]**
-- `jp_evening_heatmap.py` → **[ADD_LINK_HERE]**
+### 8.3 Sample Scripts
+
+sample-debian-diag.sh - Collect system information from Debian based OS, includes several tests.
+sample-docker-pid-monitor.py - Monitors syscalls between docker namespaces / cgroups.
+sample-latency-monitor.py - Deep dive probe for socket latency.
+sample-meta-data-scraper.py - Scrapes policy/Information for EC2 Instances.
+sample-monitor-unity-syscalls.py - Monitors the Unity game engine service for specific syscalls.
+sample-monitor-unity-tcp-connections.py - Monitors all TCP network traffic to the Unity servicee.
+sample-socket-monitor.py - Identifies ALL socket calls, showing the pid, process, subprocesses, children and zombies.
 
 ---
 
