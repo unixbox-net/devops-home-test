@@ -232,7 +232,6 @@ Emit counters + histograms (no per-event series) under a strict label allowlist 
 - **RED framing:** Rate, Errors, Duration for login → matchmaking → join.  
   *Source:* [Grafana — The RED Method](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)
 
-
 ### 2.3 Ingestion & Transport
 From the series budget we derive ~150k samples/s global (~50k/s/region) and size for ≥200k/s headroom. We design for 1×/3×/5× bursts, apply backpressure, and prioritize gameplay SLIs so spikes don’t cascade. A durable, quota-aware pipeline keeps data loss and dashboard lag off the critical path.
 
@@ -241,9 +240,14 @@ From the series budget we derive ~150k samples/s global (~50k/s/region) and size
   - *Verify:* synthetic **1×/3×/5×** load; watch accept rate & WAL latency.  
 - **Burst posture:** test **1× / 3× / 5×** (baseline/patch/mass‑event).  
   - *Why:* ensure spikes don’t cascade; backlog drains cleanly.  
-  - *Verify:* lag‑based throttling/backpressure; prove replay.  
+  - *Verify:* lag‑based throttling/backpressure; prove replay.
+  *Source:* [Kafka performance tuning — tips & best practices (AutoMQ wiki)](https://github.com/AutoMQ/automq/wiki/Kafka-Performance-Tuning%3A-Tips-%26-Best-Practices)
+
 - **Backpressure order:** shed non‑critical (verbose logs) first; protect gameplay SLIs.  
-  - *Refs:* SRE “Managing Load” & “Handling Overload”; Kafka/Kinesis tuning notes.
+  *Sources:*  
+  - [SRE Workbook — Managing Load](https://sre.google/workbook/managing-load/)  
+  - [SRE Book — Handling Overload](https://sre.google/sre-book/handling-overload/)
+
 
 ### 2.4 Storage & Retention
 At ~15–20 B/sample, 150k/s × 86,400 ≈ 12.96B samples/day yields ~200–260 GB/day global (hot); we budget ~500 GB/day per region (hot) for index/replica headroom. Tier metrics 10 s for ~14 d (hot) → 1–5 m for ~180+ d (warm) → 5 m/1 h to ~13 mo (cold, S3/Parquet), and keep logs separate (7 d / 30 d / 365 d) with PII tokenized. This is where cost, reliability, and query speed meet.
