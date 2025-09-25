@@ -1,43 +1,43 @@
 ### Technology List (with Why/Purpose)
 
 ## Networking & Foundations (per region)
-Amazon VPC — Private network boundaries (public/private/isolated subnets), multi-AZ resilience.
-Internet Gateway / NAT Gateways (1 per AZ) — Egress for private subnets without exposing instances.
-VPC Endpoints (Interface/Gateway) — Private access to S3, AMP, AMG, Kinesis, Firehose, OpenSearch, SSM, ECR, STS, CloudWatch (no public internet).
-AWS Route 53 (private hosted zone) — Service discovery (e.g., obs.internal) for gateways and backends.
-AWS WAF (on public UIs, if any) — Edge filtering for Grafana or custom portals.
-AWS KMS — Key management for at-rest encryption (metrics, logs, S3, Secrets).
-AWS IAM — Least-privilege roles and scoped data-source access.
-AWS Certificate Manager (ACM) — TLS cert lifecycle for frontends and ALBs.
-AWS Systems Manager (SSM) — Session Manager (SSH-less access), Parameter Store, fleet ops.
+-  Amazon VPC — Private network boundaries (public/private/isolated subnets), multi-AZ resilience.
+-  Internet Gateway / NAT Gateways (1 per AZ) — Egress for private subnets without exposing instances.
+-  VPC Endpoints (Interface/Gateway) — Private access to S3, AMP, AMG, Kinesis, Firehose, OpenSearch, SSM, ECR, STS, CloudWatch (no public internet).
+-  AWS Route 53 (private hosted zone) — Service discovery (e.g., obs.internal) for gateways and backends.
+-  AWS WAF (on public UIs, if any) — Edge filtering for Grafana or custom portals.
+-  AWS KMS — Key management for at-rest encryption (metrics, logs, S3, Secrets).
+-  AWS IAM — Least-privilege roles and scoped data-source access.
+-  AWS Certificate Manager (ACM) — TLS cert lifecycle for frontends and ALBs.
+-  AWS Systems Manager (SSM) — Session Manager (SSH-less access), Parameter Store, fleet ops.
 
 ## Compute & Golden Images
-EC2 Auto Scaling Groups (ASG) — Horizontal scale for collector/gateway and admin/bastion nodes.
-Packer — Builds golden AMIs (immutable base for edge, gateway, bastion).
-cloud-init & systemd — First-boot templating and deterministic service start order.
-cosign / sigstore (image signing) — Provenance + enforcement (only signed AMIs/OCI run).
-SBOM tools (e.g., Syft/Grype) — Supply-chain visibility for baked images and agents.
+-  EC2 Auto Scaling Groups (ASG) — Horizontal scale for collector/gateway and admin/bastion nodes.
+-  Packer — Builds golden AMIs (immutable base for edge, gateway, bastion).
+-  cloud-init & systemd — First-boot templating and deterministic service start order.
+-  cosign / sigstore (image signing) — Provenance + enforcement (only signed AMIs/OCI run).
+-  SBOM tools (e.g., Syft/Grype) — Supply-chain visibility for baked images and agents.
 
 ## Agents (on game/edge hosts)
-Prometheus Node Exporter — Host metrics (CPU, mem, disk, net).
-Custom Gameplay Exporter — Player-centric counters & histograms (tick time, action→ack).
-AWS Distro for OpenTelemetry (ADOT) — Agent mode — Batching, retry, remote_write to gateway; TLS/mTLS.
-Fluent Bit — Lightweight log shipping to Kinesis Firehose / OpenSearch / S3.
-WireGuard — Secure overlay for edge→gateway paths; supports multi-tenant meshes.
+-  Prometheus Node Exporter — Host metrics (CPU, mem, disk, net).
+-  Custom Gameplay Exporter — Player-centric counters & histograms (tick time, action→ack).
+-  AWS Distro for OpenTelemetry (ADOT) — Agent mode — Batching, retry, remote_write to gateway; TLS/mTLS.
+-  Fluent Bit — Lightweight log shipping to Kinesis Firehose / OpenSearch / S3.
+-  WireGuard — Secure overlay for edge→gateway paths; supports multi-tenant meshes.
 
 ## Collector / Gateway Layer (EC2)
-ADOT — Gateway mode (or Prometheus Remote-Write Gateway) — Central throttling, relabeling, per-tenant quotas, mTLS termination.
-Envoy / Nginx (front of gateway) — TLS, 429 + Retry-After on overage, request shaping and auth.
-Security Groups & NACLs — Tight east-west and north-south rule sets; per-role isolation.
+-  ADOT — Gateway mode (or Prometheus Remote-Write Gateway) — Central throttling, relabeling, per-tenant quotas, mTLS termination.
+-  Envoy / Nginx (front of gateway) — TLS, 429 + Retry-After on overage, request shaping and auth.
+-  Security Groups & NACLs — Tight east-west and north-south rule sets; per-role isolation.
 
 ## Transport, Storage & Query
-Amazon Kinesis Data Streams — Optional buffer & decoupler for metrics/logs; absorbs spikes, enables replay.
-Amazon Kinesis Firehose — Managed fan-out logs→OpenSearch (hot) and logs→S3 (archive).
-Amazon Managed Service for Prometheus (AMP) — Managed PromQL TSDB for metrics (hot 10s); no cluster to run.
-Amazon OpenSearch Service — Logs hot search (3–7 days) with index lifecycle; UltraWarm optional.
-Amazon S3 — Warm/cold stores: metrics downsampled (Parquet/ORC), logs raw/archives; lifecycle to IA/Glacier.
-AWS Glue / AWS Lambda (ETL jobs) — Downsample metrics to Parquet, build long-range rollups.
-Amazon Athena — SQL on S3 for historical analytics; Grafana can query it too.
+-  Amazon Kinesis Data Streams — Optional buffer & decoupler for metrics/logs; absorbs spikes, enables replay.
+-  Amazon Kinesis Firehose — Managed fan-out logs→OpenSearch (hot) and logs→S3 (archive).
+-  Amazon Managed Service for Prometheus (AMP) — Managed PromQL TSDB for metrics (hot 10s); no cluster to run.
+-  Amazon OpenSearch Service — Logs hot search (3–7 days) with index lifecycle; UltraWarm optional.
+-   mazon S3 — Warm/cold stores: metrics downsampled (Parquet/ORC), logs raw/archives; lifecycle to IA/Glacier.
+-  AWS Glue / AWS Lambda (ETL jobs) — Downsample metrics to Parquet, build long-range rollups.
+-  Amazon Athena — SQL on S3 for historical analytics; Grafana can query it too.
 
 ## Visualization, Alerting & Incident Flow
 Amazon Managed Grafana (AMG) — Dashboards for AMP/OpenSearch/Athena; SSO/RBAC; alert rules.
