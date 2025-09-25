@@ -226,9 +226,12 @@ Emit counters + histograms (no per-event series) under a strict label allowlist 
 
 - **Series budget:** ≈ **300 active series/server**.  
   - *Why:* linear scaling with fleet; predictable storage & query cost.  
-  - *Size/verify:* exporter self‑metric `active_series_total`; gate rollouts when > budget.  
+  - *Size/verify:* exporter self‑metric `active_series_total`; gate rollouts when > budget.
+  *Source:* [Prometheus — Naming & labels guidance](https://prometheus.io/docs/practices/naming/)
+
 - **RED framing:** Rate, Errors, Duration for login → matchmaking → join.  
-  - *Refs:* Tom Wilkie’s RED method.
+  *Source:* [Grafana — The RED Method](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)
+
 
 ### 2.3 Ingestion & Transport
 From the series budget we derive ~150k samples/s global (~50k/s/region) and size for ≥200k/s headroom. We design for 1×/3×/5× bursts, apply backpressure, and prioritize gameplay SLIs so spikes don’t cascade. A durable, quota-aware pipeline keeps data loss and dashboard lag off the critical path.
