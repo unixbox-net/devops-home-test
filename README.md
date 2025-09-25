@@ -194,18 +194,18 @@ Start with a player reality—1,000,000 CCU roughly split across NA/EU/APAC—be
 
 - **Peak population:** 1,000,000 CCU, ~even split across NA/EU/APAC.  
   - *Why:* anchors shard counts, per‑region quotas, and AZ spread.  
-  - *Size/verify:* regional CCU telemetry or historical curves (assume 35/35/30 if unknown).  
-  *Source:* - [Google SRE — “Monitoring Distributed Systems”](https://sre.google/sre-book/monitoring-distributed-systems/)
+  - *Size/verify:* regional CCU telemetry or historical curves (assume 35/35/30 if unknown).
+  - *Source:* - [Google SRE — “Monitoring Distributed Systems”](https://sre.google/sre-book/monitoring-distributed-systems/)
 
 - **Gameserver density:** ~200 CCU/server ⇒ ~5,000 servers (~1,700/region).  
   - *Why:* converts CCU into hosts → exporter/series budgets & autoscaling units.  
-  - *Size/verify:* match sizes + CPU headroom per game mode; adjust after soak.  
-  *Source:* - [Brendan Gregg — The USE Method](https://www.brendangregg.com/usemethod.html)
+  - *Size/verify:* match sizes + CPU headroom per game mode; adjust after soak.
+  - *Source:* - [Brendan Gregg — The USE Method](https://www.brendangregg.com/usemethod.html)
 
 - **Emission cadence:** 10 s steady; 5 s during incidents.  
   - *Why:* smooth charts at low cost; bump resolution only when needed.  
-  - *Size/verify:* edge flags; exporter CPU < 1–2% at 5 s.  
-  *Source:* - [Google SRE — “Monitoring Distributed Systems”](https://sre.google/sre-book/monitoring-distributed-systems/)
+  - *Size/verify:* edge flags; exporter CPU < 1–2% at 5 s.
+  - *Source:* - [Google SRE — “Monitoring Distributed Systems”](https://sre.google/sre-book/monitoring-distributed-systems/)
 
 ### 2.2 Signal Shapes
 Emit counters + histograms (no per-event series) under a strict label allowlist and a ~300 active series/server budget. Histograms yield accurate p95/p99 while preventing cardinality blowups or PII leaks. Metrics ingestion and query cost are dominated by series count; this keeps the system operable at 1M CCU.
@@ -213,7 +213,7 @@ Emit counters + histograms (no per-event series) under a strict label allowlist 
 - **Edge aggregation only:** counters + (exponential) histograms (no per‑event series).  
   - *Why:* p95/p99 without per‑event explosion.  
   - *Size/verify:* compare histogram quantiles vs. raw‑sample quantiles on a canary.
-  *Sources:* - [Prometheus — Histogram best practices](https://prometheus.io/docs/practices/histograms/)  
+  - *Sources:* - [Prometheus — Histogram best practices](https://prometheus.io/docs/practices/histograms/)  
   - `histogram_quantile()` in PromQL (see same doc)  
   - [OTel — Exponential histograms (overview)](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram)
 
