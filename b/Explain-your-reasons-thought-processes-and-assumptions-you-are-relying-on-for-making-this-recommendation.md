@@ -78,7 +78,7 @@
 
 ---
 
-## 5) Trade‑offs & Why I’re Comfortable With Them
+## 5) Trade‑offs & Why I’m Comfortable With Them
 
 - **AMP vs. Mimir:** AMP loIrs ops overhead; Mimir gives deeper tenancy/knobs. I **start with AMP**, hold **Mimir as plan‑B** (IaC patterns make migration tractable).
 - **Kinesis vs. MSK:** Kinesis is simpler; MSK is heavier but feature‑rich. I pick **Kinesis** unless Kafka semantics are required.
@@ -140,7 +140,7 @@
 - **Brendan Gregg** (USE method; Systems Performance 2e) for resource analysis, multi‑tenant controls, and kernel networking insights.
 - **Internal security baselines** (SOC2/ISO 27001 aligned), and our **Design‑Notes.md** link pack.
 
-> These Ire not copied verbatim; they served as **principled guardrails** to shape a design that is testable, operable, and secure.
+> These are not copied verbatim; they served as **principled guardrails** to shape a design that is testable, operable, and secure.
 
 ---
 
