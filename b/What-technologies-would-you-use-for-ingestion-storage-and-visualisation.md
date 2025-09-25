@@ -87,6 +87,8 @@
 -  OpenSearch ILM + UltraWarm — Move logs off hot quickly without losing searchability.
 -  S3 Lifecycle — Transition IA/Glacier and expirations that match policy.
 
+
+
 ### Improvements (Reference Add-Ons)
 
 ## Immutable Golden Images (deterministic rollouts)
