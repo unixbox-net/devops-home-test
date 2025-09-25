@@ -1,4 +1,4 @@
-# JP Evening Latency — All‑in‑One Case Runbook & Troubleshooting Methodology
+# JP Evening Latency — All‑in‑One Case Runbook & Troubleshooting Methodology (Expanded Commands Edition)
 _A single, self‑contained Markdown that **answers the specific case questions** and documents **how I troubleshoot**. It includes the **W’s intake**, **Fishbone (Ishikawa)** model, userland commands, custom diagnostic scripts, and **in‑kernel** instrumentation (eBPF/DTrace). Built for copy‑paste execution and white‑glove collaboration with providers._
 
 ---
@@ -7,14 +7,14 @@ _A single, self‑contained Markdown that **answers the specific case questions*
 - [0) Ethos & Models](#0-ethos--models)
 - [1) The W’s — Question‑First Intake (Full Checklist)](#1-the-ws--questionfirst-intake-full-checklist)
 - [2) Access & Environment Discovery](#2-access--environment-discovery)
-- [3) The Case (C) — Direct Answers](#3-the-case-c--direct-answers)
-  - [3.1 How I confirm the issue & collaborate with the provider](#31-how-i-confirm-the-issue--collaborate-with-the-provider)
-  - [3.2 Extra info (i): Third‑party host with weak metrics — how I get signal](#32-extra-info-i-thirdparty-host-with-weak-metrics--how-i-get-signal)
-  - [3.3 Extra info (ii): Mix of cloud & bare metal — W’s for each + L2→L7 proof](#33-extra-info-ii-mix-of-cloud--bare-metal--ws-for-each--l2l7-proof)
+- [3) The Case (C) — Direct Answers (WITH PRACTICAL COMMANDS)](#3-the-case-c--direct-answers-with-practical-commands)
+  - [3.1 Confirm the issue & collaborate with the provider](#31-confirm-the-issue--collaborate-with-the-provider)
+  - [3.2 Third‑party with weak metrics — how to get signal](#32-thirdparty-with-weak-metrics--how-to-get-signal)
+  - [3.3 Mix of cloud & bare metal — W’s for each + L2→L7 proof](#33-mix-of-cloud--bare-metal--ws-for-each--l2l7-proof)
   - [3.4 Data & metrics required to confirm the issue](#34-data--metrics-required-to-confirm-the-issue)
-  - [3.5 Tooling I need in place (incl. custom craftables)](#35-tooling-i-need-in-place-incl-custom-craftables)
-  - [3.6 Debug steps — Fishbone (Ishikawa) applied to latency](#36-debug-steps--fishbone-ishikawa-applied-to-latency)
-  - [3.7 Working with the game‑server provider — white‑glove playbook](#37-working-with-the-gameserver-provider--whiteglove-playbook)
+  - [3.5 Tooling to have in place (incl. custom craftables)](#35-tooling-to-have-in-place-incl-custom-craftables)
+  - [3.6 Debug steps — Fishbone applied (with command menus)](#36-debug-steps--fishbone-applied-with-command-menus)
+  - [3.7 Provider playbook — white‑glove engagement](#37-provider-playbook--whiteglove-engagement)
 - [4) End‑to‑End Procedure (Line‑by‑Line Execution)](#4-endtoend-procedure-linebyline-execution)
 - [5) Examples: Commands, Scripts, and eBPF/DTrace](#5-examples-commands-scripts-and-ebpfdtrace)
 - [6) Provider Command Pack & Escalation Template](#6-provider-command-pack--escalation-template)
@@ -61,41 +61,146 @@ Document answers in an **evidence log** (timestamps, commands, artifact hashes).
 
 ---
 
-## 3) The Case (C) — Direct Answers
+## 3) The Case (C) — Direct Answers (WITH PRACTICAL COMMANDS)
 
-### 3.1 How I confirm the issue & collaborate with the provider
-1. **Prove the symptom**: enable/collect **client RUM** (RTT/jitter/loss p50/p95/p99; tags: **ISP/ASN**, **IPv4/6**, **serverID**) and run **synthetic probes** (Tokyo/Osaka on NTT/KDDI/SoftBank) — `mtr` + `iperf3 -u` — focused on **19:00–24:00 JST**. Build **JST heatmaps**.  
-2. **Correlate layers**: host (softirq/IRQ, NIC drops, qdisc backlog, CPU steal) ↔ path (Paris MTR forward/reverse, first bad hop/ASN/IX).  
-3. **White‑glove with provider**: send a one‑pager (impact window, visuals), attach pathproof, and request **edge/TOR/IX** counters + **A/B routing** via alternate transit/POP for a canary (10–20%).  
-4. **Mitigate & verify**: promote the winning path, or tune host (IRQ/RSS/NUMA/fq_codel), adjust scrubbing, scale/weight JP pools. Validate against SLOs across **two evenings**.
+### 3.1 Confirm the issue & collaborate with the provider
+**Goal:** turn player reports into measured evidence; correlate to a point in the stack; propose a reversible canary; validate fix.
 
-### 3.2 Extra info (i): Third‑party host with weak metrics — how I get signal
-- **Players/support** → time‑aligned ticket volume & categories.  
-- **Client RUM** → add minimal telemetry to netcode; ship histograms.  
-- **Self‑managed probes** → deploy in Tokyo/Osaka over major ISPs; schedule `mtr`/`iperf3 -u`.  
-- **If provider can’t export**: give them **read‑only command pack**; require artifact hashes (chain of custody).
+#### 3.1.1 Basic hygiene (run first on every server)
+```bash
+# Identity, time, DNS
+hostnamectl; cat /etc/hostname
+date -u; timedatectl status
+chronyc tracking; chronyc sources -v
+cat /etc/resolv.conf; cat /etc/nsswitch.conf; getent hosts <game-hostname>
 
-### 3.3 Extra info (ii): Mix of cloud & bare metal — W’s for each + L2→L7 proof
-- **Cloud**: check **CPU steal/throttle**, vNIC features/offloads, AZ placement, DDoS region/policy; try **accelerator/alternate transit** canary.  
-- **Bare metal**: validate NIC firmware/driver, **IRQ/RSS/XPS**, **NUMA**, TOR uplink headroom, IX peering.  
-- **L2→L7**: MTU/frag; UDP/TCP path jitter/loss; socket queue/backlog; app tick/frame timing; DNS geo/TTL behavior (v4 vs v6 steering).
+# Network identity & addressing
+ip -br addr; ip -br link; ip -br -6 addr
+ip route; ip -6 route; ip rule show
+grep . /etc/hosts
+
+# Name resolution checks
+dig +short A <game-hostname>; dig +short AAAA <game-hostname>
+dig +trace <game-hostname>; nslookup <game-hostname>
+```
+**Why:** Mis-set time, DNS, routes, or host files cause silent mis‑steer or TLS/auth weirdness.
+
+#### 3.1.2 Connectivity sanity
+```bash
+# L3 reachability & MTU
+ping -c 5 <upstream-ip>; ping -c 5 -M do -s 1472 <upstream-ip>   # path MTU check
+ping6 -c 5 <upstream-v6-ip>
+
+# Quick HTTP(s) to health endpoints (if exposed)
+curl -sS -o /dev/null -w 'code=%{http_code} time_total=%{time_total}\n' https://<health-endpoint>
+```
+**Why:** Proves basic reachability and fragmentation issues early.
+
+#### 3.1.3 Path & routing proof (forward & reverse)
+```bash
+# Paris traceroute/MTR (UDP, more game-like), forward path
+mtr -u -w -z --json -c 200 <server-ip> > mtr_fwd.json
+
+# Reverse: from the server to a JP probe (or your office / cloud VM in Tokyo)
+mtr -u -w -z --json -c 200 <probe-ip> > mtr_rev.json
+
+# Compare IPv4 vs IPv6 behavior
+mtr -4 -u -w -z --json -c 200 <server-ip> > mtr_v4.json
+mtr -6 -u -w -z --json -c 200 <server-v6> > mtr_v6.json
+```
+**Why:** Many evening issues are peering/IX congestion or detours; first bad hop + ASN gives provider‑actionable evidence.
+
+#### 3.1.4 Server health quicklook
+```bash
+# CPU, load, steal (cloud), interrupts, softirqs
+uptime; mpstat -P ALL 1 5
+cat /proc/softirqs | sed -n '1,50p'
+
+# Memory/hugepages; pressure (if available)
+free -h; grep -H . /sys/kernel/mm/transparent_hugepage/*
+cat /proc/pressure/{cpu,io,memory} 2>/dev/null || true
+
+# NIC stats & queues
+for IF in $(ls /sys/class/net | grep -E 'eth|ens|eno|enp'); do
+  echo "=== $IF ==="
+  ethtool -S $IF | egrep 'rx_dropped|tx_dropped|rx_no_buffer|rx_missed|fifo|errors' || true
+  ethtool -k $IF | egrep 'gro|gso|tso|lro|rxhash'
+  ethtool -l $IF 2>/dev/null | sed -n '1,80p' || true
+done
+
+# qdisc / backlog
+tc -s qdisc show dev <uplink-iface> | sed -n '1,80p'
+```
+**Why:** Softirq backlogs, ring overflows, and qdisc queues directly manifest as jitter/loss.
+
+#### 3.1.5 Socket & flow observations
+```bash
+# Top UDP listeners and their queues
+ss -u -lpn | head -50
+ss -u -npi | sed -n '1,200p'   # look for send/recv queue sizes
+
+# IP stack counters
+nstat -az | egrep 'InErrs|IpReasmFails|UdpInErrors|TcpRetransSegs|RcvbufErrors|SndbufErrors'
+```
+**Why:** Confirms if the problem is inside the host (buffering, drops) vs. outside (path).
+
+#### 3.1.6 Short targeted captures
+```bash
+# Minimal rotating capture (20 MB) on the game port
+tcpdump -ni <uplink-iface> udp port <GAME_PORT> -C 20 -W 4 -w game.cap &
+
+# Quick loss/jitter feel using tshark stats (if installed)
+tshark -i <uplink-iface> -f "udp port <GAME_PORT>" -q -z io,stat,5
+```
+**Why:** Packet timing and loss visible without drowning in pcap.
+
+#### 3.1.7 Synthetic throughput & jitter
+```bash
+# UDP jitter/bw toward server (from a JP probe)
+iperf3 -u -b 50M -t 30 -c <server-ip> --json > iperf_to_server.json
+# Reverse (server acts as client if allowed)
+iperf3 -u -b 50M -t 30 -c <probe-ip> --json > iperf_to_probe.json
+```
+**Why:** Validate sustained bandwidth and jitter headroom during evening window.
+
+#### 3.1.8 Collaborate with provider (practical flow)
+- Send the **one‑pager** with graphs/heatmaps + **mtr fwd/rev** JSON.  
+- Include **safe read‑only command pack** (see §6.1) so they can reproduce counters/screenshots.  
+- Ask for **edge/TOR/IX** utilization/drops and transient **BGP/scrubbing** changes over **19:00–24:00 JST**.  
+- Propose a **canary**: route 10–20% JP traffic via alternate transit/POP or bypass scrubbing for the game UDP ports; compare p95 RTT/jitter/loss.
+
+---
+
+### 3.2 Third‑party with weak metrics — how to get signal
+- **Players/support signals**: export ticket timestamps and categories; graph vs JST hour.  
+- **Client telemetry (RUM)**: embed RTT/jitter/loss histograms with labels (**ISP/ASN**, **IPv4/6**, **serverID**).  
+- **Self‑run probes**: Tokyo/Osaka VPS across NTT/KDDI/SoftBank; cron `mtr` and `iperf3 -u` JSON; hash artifacts.  
+- **If they can’t export**: provide the **command pack** (read‑only), request raw outputs + SHA256SUMS.
+
+---
+
+### 3.3 Mix of cloud & bare metal — W’s for each + L2→L7 proof
+- **Cloud**: check **CPU steal/throttle**, vNIC offloads (ENA/SR‑IOV), AZ placement, regional DDoS layer; try **Global Accelerator/Anycast** or **alternate transit** canary.  
+- **Bare metal**: confirm NIC driver/firmware, **IRQ/RSS/XPS** layout, **NUMA** pinning, TOR uplink headroom, IX peering status.  
+- **L2→L7**: MTU/frag; UDP/TCP path loss/jitter; socket queues/pacing; app tick/frame timing; DNS geo/TTL (v4 vs v6).
+
+---
 
 ### 3.4 Data & metrics required to confirm the issue
-- **Player RUM**: RTT/jitter/loss histograms with tags (**ISP/ASN**, **IPv4/6**, **serverID**, city, device), **5–10 min** bins with **JST** timestamps.  
+- **Player RUM**: RTT, jitter, loss histograms with **ISP/ASN**, **IPv4/6**, **serverID**, city/device; 5–10‑min bins; **JST** timestamps.  
 - **Server/Host**: CPU user/sys/**steal**, run queue; **softirq/IRQ** rates; NIC `ethtool -S` drops/rings; **qdisc** backlog; per‑socket RTT/loss; **PPS/BPS** per process; **time sync**.  
-- **Network/Path**: Paris MTR fwd/rev; hop/ASN/IX of first degradation; **IPv4 vs IPv6** split; **edge/TOR/IX** utilization/drops; **BGP/scrubbing** logs.  
-- **Business**: abandon/reconnect/complaint rates aligned to the window.
+- **Network/Path**: Paris MTR fwd/rev; first bad hop/ASN/IX; **IPv4 vs IPv6** deltas; **edge/TOR/IX** utilization/drops; **BGP/scrubbing** logs.  
+- **Business**: abandon/reconnect/complaint rates correlated to the evening window.
 
-### 3.5 Tooling I need in place (incl. custom craftables)
-- **Off‑the‑shelf**: Prometheus/Grafana (RUM histograms), OTel, ELK/Loki; RIPE/ThousandEyes/Catchpoint or DIY probes; node_exporter, snmp_exporter.  
-- **Custom**:  
-  - `udp_rtt_buckets.bpf` — per‑socket RTT histograms keyed by serverID (Prom exporter).  
-  - `nicq_watch.bpf` — sample qdisc backlog + NIC ring occupancy; alert on thresholds.  
-  - `tick_drift_probe.bpf` — detect app tick/frame stalls vs wall clock.  
-  - `paris_mtr_cron.sh` — cronable UDP MTR with JSON + SHA256 for custody.  
-  - *(Insert repo links below in Appendix 8.3.)*
+---
 
-### 3.6 Debug steps — Fishbone (Ishikawa) applied to latency
+### 3.5 Tooling to have in place (incl. custom craftables)
+- **Off‑the‑shelf**: Prometheus/Grafana, OTel, ELK/Loki; RIPE/ThousandEyes/Catchpoint or DIY probes; node_exporter, snmp_exporter.  
+- **Custom**: `udp_rtt_buckets.bpf`, `nicq_watch.bpf`, `tick_drift_probe.bpf`, `paris_mtr_cron.sh`. *(Drop repo links in §8.3.)*
+
+---
+
+### 3.6 Debug steps — Fishbone applied (with command menus)
 ```
                                  ┌──────── Application/Tick ────────┐
                                  │ GC pauses, locks, serialization  │
@@ -110,20 +215,35 @@ Document answers in an **evidence log** (timestamps, commands, artifact hashes).
                                  │ scrubbing hairpin, QoS│
                                  └───────────────────────┘
 ```
-**Per bone → Hypothesis → Tests → Data → Mitigations:**  
-- **Network/Peering**: Paris MTR fwd/rev; IPv4/6 split; **A/B** transit/POP. → Shift route/peering; add IX capacity.  
-- **Host/Kernel/NIC**: `runqlat`, `softirqs`, `ethtool -S`, `tc -s`. → Tune IRQ/RSS/XPS, fq_codel, ring sizes, NUMA pin.  
-- **Capacity/Matchmaking**: pool utilization & serverID distribution. → Scale JP pools; reweight to healthy DC/AZ.  
-- **Application/Tick**: uprobes around tick loop; flamegraphs. → GC/lock tuning; pacing.  
-- **DNS/Geo/Policy**: resolver ASNs; answer mapping; TTL. → geoDB fixes; TTL tuning.  
-- **Change/Config**: 72h change audit; rollback. → Revert/patch; CAPA.  
-- **DDoS/Security**: scrubbing logs; latency by policy. → Nearest scrubbing region; policy exception for UDP ports.
+**Network/Peering — commands:**  
+```bash
+mtr -u -w -z --json -c 200 <target>
+traceroute -U -p <GAME_PORT> <target>
+ip -s link show <uplink>; ethtool -S <uplink>
+```
+**Host/Kernel/NIC — commands:**  
+```bash
+mpstat -P ALL 1 5; cat /proc/softirqs | sed -n '1,50p'
+ethtool -k <uplink>; ethtool -l <uplink>; tc -s qdisc show dev <uplink>
+ss -u -npi | sed -n '1,200p'
+```
+**Capacity/Matchmaking — actions:** check pool utilization, serverID distribution, and matchmaking policy weights.  
+**Application/Tick — commands:** bpftrace uprobes around tick loop; `perf top/record`; flamegraphs.  
+**DNS/Geo/Policy — commands:**  
+```bash
+dig +short A <game-hostname>; dig +short AAAA <game-hostname>
+dig @<resolver> <game-hostname> +nsid
+```
+**Change/Config — actions:** 72‑hour change audit; `git log` in infra repos; package diffs.  
+**DDoS/Security — actions:** request scrubbing logs; test with/without scrubbing; closest scrubbing POP.
 
-### 3.7 Working with the game‑server provider — white‑glove playbook
-- **Engagement modes**: (1) We run; (2) They run our **script pack**; (3) Screen‑share we drive.  
-- **What we send**: one‑pager (JST window, impact), heatmaps, host overlays, Paris MTR (hop/ASN highlighted).  
-- **Requests (48h)**: edge/TOR/IX counters; peering matrix; BGP/scrubbing notes; server placement/noisy‑neighbor flags; approve **A/B routing** canary (10–20%).  
-- **Validation**: compare p95 RTT/jitter/loss over two evenings; promote winning path; lock in peering/tuning; publish concise player status.
+---
+
+### 3.7 Provider playbook — white‑glove engagement
+- **Modes**: (1) We run; (2) They run our pack; (3) Screen‑share we drive.  
+- **Send**: one‑pager (impact window), RUM heatmaps, host overlays, MTR fwd/rev with ASN callouts.  
+- **Ask (48h)**: edge/TOR/IX counters; peering matrix; BGP/scrubbing notes; placement/noisy‑neighbor; **A/B routing** canary approval.  
+- **Validate**: compare p95 RTT/jitter/loss over two evenings; promote winning path; lock peering/tuning; publish concise player status.
 
 ---
 
@@ -195,7 +315,7 @@ prog = r"""
 #include <uapi/linux/ptrace.h>
 BPF_HISTOGRAM(lat, u64);
 int kprobe__udp_recvmsg(struct pt_regs *ctx) {
-  u64 d = bpf_ktime_get_ns() % 1000000; # sketch: replace with real rtt calc
+  u64 d = bpf_ktime_get_ns() % 1000000; // sketch: replace with real rtt calc
   lat.increment(bpf_log2l(d));
   return 0;
 }
@@ -267,4 +387,4 @@ histogram_quantile(0.95, sum(rate(game_rtt_ms_bucket{region="jp"}[5m])) by (le, 
 
 ---
 
-**Outcome:** This single document both **answers the case prompts** and codifies my **methodology** (W’s + Fishbone + OODA/PDCA), with practical examples (userland + custom + in‑kernel) and a provider‑friendly playbook. It moves from **anecdote → proof → mitigation → durable fix** with professional, white‑glove communication.
+**Outcome:** This single document **answers the case prompts** with accessible, copy‑paste commands, while preserving a rigorous method (W’s + Fishbone + OODA/PDCA). It enables fast proof → mitigation → durable fix with professional, white‑glove collaboration.
