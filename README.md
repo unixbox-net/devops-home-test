@@ -62,7 +62,7 @@
 - [12. Risks & Mitigations](#12-risks--mitigations)
 - [13. Open Questions](#13-open-questions)
 - [14. Appendices](#14-appendices)
-- [15. Improvements Adornment (Reference-Only)](#15-improvements-adornment-reference-only)
+- [15. Improvements Adornment (Reference-Only)](#15-improvements-adornment)
   - [15.1 Immutable Golden Images](#151-immutable-golden-images)
   - [15.2 Cilium + Hubble & eBPF Summaries](#152-cilium--hubble--ebpf-summaries)
   - [15.3 Firecracker MicroVM Sidecars](#153-firecracker-microvm-sidecars)
