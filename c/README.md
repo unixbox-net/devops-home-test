@@ -14,7 +14,7 @@ _A single, self‑contained Markdown that **answers the specific case questions*
 
 ## Table of Contents
 - [0) Ethos & Models](#0-ethos--models)
-- [1) The W’s — Question‑First Intake (Full Checklist)](# 1) Step Back: The W’s (Full Question Bank))
+- [1) The W’s — Question-First Intake (Full Checklist)](#1-the-ws--question-first-intake-full-checklist)
 - [2) Access & Environment Discovery](#2-access--environment-discovery)
 - [3) The Case (C) — Direct Answers (WITH PRACTICAL COMMANDS)](#3-the-case-c--direct-answers-with-practical-commands)
   - [3.1 Confirm the issue & collaborate with the provider](#31-confirm-the-issue--collaborate-with-the-provider)
@@ -45,7 +45,7 @@ _A single, self‑contained Markdown that **answers the specific case questions*
 
 ---
 
-# 1) Step Back: The W’s (Full Question Bank)
+## 1) The W’s — Question-First Intake (Full Checklist)
 Capture answers in an **evidence log** (timestamps, commands, artifact hashes). Do not proceed until the scope is unambiguous.
 
 ### 1.1 Who
