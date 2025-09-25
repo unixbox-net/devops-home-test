@@ -1,7 +1,18 @@
-### How it stays performant (by construction)
-- Don’t flood it. Servers emit summaries only (counters + histograms). No per‑event time series.
-- Bound cardinality. Strict label allowlist and ~300 series/server budget enforced in CI and at the edge; rollouts gated on budget.
-- Decouple producers. Telemetry first lands in a stream (Kinesis/MSK) to absorb bursts, enable replay, and fan‑out.
-- Tiered retention. Hot 10s for ~14 d, warm 1–5 m for 180+ d, cold Parquet/ORC on S3 for audits/backfills. Recording rules precompute p95/p99 and rollups.
-- SLO‑driven backpressure. Quotas at edge→broker→ingesters→queriers; shed non‑critical classes first (e.g., verbose logs).
-- Security & tenancy. Per‑team tenants/quotas; TLS/KMS; PII‑free metrics.
+## Don’t flood it — Emit summaries only
+-  What to emit: counters + (exponential) histograms; no per-event time series.
+-  Exporter budget per host: ≤ 300 active series; CPU overhead ≤ 2% at 10s; ≤ 3% at 5s (incident mode).
+-  OTel/ADOT (agent) hint:
+```yaml
+processors:
+  batch: { timeout: 5s, send_batch_size: 2000, send_batch_max_size: 5000 }
+  transform:  # drop per-event metrics if they slip in
+    metric_statements:
+      - context: metric
+        statements:
+          - delete_metric(name == "request_duration_seconds") # if this is a summary
+exporters:
+  prometheusremotewrite:
+    endpoint: ${GATEWAY_URL}
+    tls: { insecure: false }
+    external_labels: { region: ${REGION}, build_id: ${BUILD_ID} }
+```
