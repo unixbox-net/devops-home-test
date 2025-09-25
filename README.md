@@ -213,12 +213,12 @@ Emit counters + histograms (no per-event series) under a strict label allowlist 
 - **Edge aggregation only:** counters + (exponential) histograms (no per‑event series).  
   - *Why:* p95/p99 without per‑event explosion.  
   - *Size/verify:* compare histogram quantiles vs. raw‑sample quantiles on a canary.
-  - *Sources:*  [Prometheus — Histogram best practices](https://prometheus.io/docs/practices/histograms/)  
+  *Sources:*  [Prometheus — Histogram best practices](https://prometheus.io/docs/practices/histograms/)  
   - `histogram_quantile()` in PromQL (see same doc)  
   - *Sources:* [OTel — Exponential histograms (overview)](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram)
 
 - **Strict label policy:** allow `{region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}`; **forbid** `{player_id, raw_ip, request_id, free-text}`.  
-  *Why:* avoid high cardinality & PII.  
+  *Why:* avoid high cardinality & PII.
   *Size/verify:* CI lint + edge-time reject; alert on series growth.  
   *Sources:*  
   - [Prometheus — Naming & labels guidance](https://prometheus.io/docs/practices/naming/)  
