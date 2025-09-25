@@ -247,7 +247,7 @@ From the series budget we derive ~150k samples/s global (~50k/s/region) and size
 - [SRE Book — Handling Overload](https://sre.google/sre-book/handling-overload/)
 
 
-### 4) Storage & retention
+### 2.4 Storage & retention
 At **~15–20 B/sample**, `150k/s × 86,400 ≈ 12.96B samples/day` yields **~200–260 GB/day global (hot)**; we budget **~500 GB/day per region (hot)** for index/replica headroom. Tier metrics **10 s for ~14 d (hot) → 1–5 m for ~180+ d (warm) → 5 m/1 h to ~13 mo (cold, S3/Parquet)**, and keep logs separate (**7 d / 30 d / 365 d**) with PII tokenized. This is where cost, reliability, and query speed meet.
 
 - **Capacity math:** as above; plan **~500 GB/day/region (hot)** incl. index/replicas.  
@@ -279,7 +279,7 @@ At **~15–20 B/sample**, `150k/s × 86,400 ≈ 12.96B samples/day` yields **~20
   [Remote write best practices](https://prometheus.io/docs/practices/remote_write/) and  
   [remote_write configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write)
 
-### 5) Query & visualization
+### 2.5 Query & visualization
 Set query SLOs **p95 ≤ 2 s (≤12 h)** and **p99 ≤ 10 s (7–30 d)**, achieved via recording rules, caching, and query limits. Dashboards follow Golden Signals so on-call can triage quickly. Slow dashboards during incidents are as bad as no dashboards.
 
 - **Query SLOs:** p95 ≤ 2 s (≤12 h), p99 ≤ 10 s (7–30 d).  
@@ -293,7 +293,7 @@ Set query SLOs **p95 ≤ 2 s (≤12 h)** and **p99 ≤ 10 s (7–30 d)**, achiev
   *Why:* standard triage surface.  
   *Ref:* [Google SRE — Four Golden Signals](https://sre.google/sre-book/monitoring-distributed-systems/)
 
-### 6) SLOs & freshness
+### 2.6 SLOs & freshness
 Commit to **write→read p99 ≤ 10 s** and **ingest TTFB p99 ≤ 250–350 ms @ 1×–3×**, with burn-rate alerts on breaches. Freshness determines whether dashboards reflect reality; these translate engineering into player-visible guarantees and anchor capacity/scaling to measurable outcomes.
 
 - **Ingest TTFB:** p99 ≤ 250–350 ms @ 1×–3×.  
@@ -312,7 +312,7 @@ Commit to **write→read p99 ≤ 10 s** and **ingest TTFB p99 ≤ 250–350 ms @
   - Ch. 2.8 (p. 75)  
   - Ch. 2.9–2.10 (pp. 77–78+)
     
-### 7) Tenancy & quotas
+### 2.7 Tenancy & quotas
 Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters → queriers**, return **429 + Retry-After** on exceed, and watch **cardinality** to cut off offenders. This isolates noisy neighbors and keeps capacity predictable; one team’s spike can’t blow everyone’s SLOs.
 
 - **Rationalization & enforcement:** apply **priorities** (shares/weights) and **limits** (bandwidth/ceilings) per resource; degrade non-critical classes first.  
@@ -326,7 +326,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 - **Cardinality controls:** per-tenant **series & samples/s** limits; dashboards for series growth; CI lint to block forbidden labels.  
   *Why:* prevent TSDB blow-ups; complements OS-level fairness.
   
-### 8) Security & Compliance (Essentials)
+### 2.8 Security & Compliance (Essentials)
 
 **Assumptions (explicit, testable)**  
 - **Data classes**  
@@ -420,11 +420,11 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 8. Architecture (AWS)
+## 3 Architecture (AWS)
 
 > _Add diagram(s) here._
 
-### 8.1 Components & AWS Services
+### 3.1 Components & AWS Services
 | Layer | Primary Services | Role |
 |---|---|---|
 | Agents / Edge | Game exporter, Node Exporter, ADOT, Fluent Bit | Emit metrics (counters/histograms), tokenize/redact logs, TLS, batching |
@@ -436,7 +436,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 | Foundations | EKS, VPC, ECR, KMS, IAM, CloudWatch, SSM, WAF | Compute/network/security/foundation |
 | IaC / CI/CD | Terraform/CDK, GitHub Actions/CodeBuild, Argo CD | Reproducible delivery |
 
-### 8.2 Data Flow (high level)
+### 3.2 Data Flow (high level)
 1. Agents emit counters + histograms every 10 s (5 s during incidents).  
 2. Metrics: ADOT → Kinesis/MSK → AMP/Mimir.  
 3. Logs: Fluent Bit → Firehose → OpenSearch (hot) & S3 (raw/Parquet).  
@@ -444,38 +444,38 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 9. Capacity & Storage Planning
+## 4 Capacity & Storage Planning
 
-### 9.1 Ingest & Storage
+### 4.1 Ingest & Storage
 - **EPS baseline:** ~150k samples/s (**≥200k/s target**).  
 - **Bytes/sample (plan):** ~15–20 B amortized.  
 - **Daily hot metrics (global):** ~200–260 GB/day (**budget: ~500 GB/day/region** incl. index/replicas).
 
-### 9.2 Retention (fill with final choices)
+### 4.2 Retention (fill with final choices)
 - **Metrics:** Hot 10s **7–14d** → Warm 1–5m **30–90d (up to 180d)** → Cold 5m/1h **~13mo (S3)**.  
 - **Logs:** **7d** hot / **30d** warm / **365d** cold (S3).
 
-### 9.3 S3 Lifecycle (concept)
+### 4.3 S3 Lifecycle (concept)
 - Metrics blocks: **30d → IA**; **180d → Glacier**; **expire 400d**.  
 - Logs: **30d → IA**; **365d → Glacier**; **expire 730d**.
 
 ---
 
-## 10. SLOs, Alerts & Dashboards
+## 5. SLOs, Alerts & Dashboards
 
-### 10.1 SLOs
+### 5.1 SLOs
 - **Freshness:** write→read **p99 ≤ 10s**.  
 - **Query latency:** **p95 ≤ 2s (≤12h)**, **p99 ≤ 10s (7–30d)**.  
 - **Ingest TTFB:** **p99 ≤ 250–350ms** @ 1×–3×.
 
-### 10.2 Alert Policy (examples to instantiate)
+### 5.2 Alert Policy (examples to instantiate)
 - Burn rate for player‑facing SLIs.  
 - Freshness breach (>10s p99).  
 - Query p95/p99 regressions.  
 - Cardinality growth / limits approaching.  
 - Compactor lag / object‑store errors.
 
-### 10.3 Dashboard Standards (add links/screens later)
+### 5.3 Dashboard Standards (add links/screens later)
 - Golden Signals per service.  
 - Gameplay SLIs.  
 - Infra/Network health.  
@@ -483,7 +483,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 11. Tenancy, Quotas & Fairness
+## 6. Tenancy, Quotas & Fairness
 
 - **Tenant model:** (teams/titles listed).  
 - **Per‑tenant quotas:** EPS, samples/s, max series, query limits.  
@@ -494,12 +494,12 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 12. Security & Compliance (Essentials)
+## 7. Security & Compliance (Essentials)
 
-### 12.1 Principles (recap)
+### 7.1 Principles (recap)
 - No PII in metrics; tokenize logs at collection; mTLS; KMS; least privilege; immutable & signed images; audit logs to S3 WORM.
 
-### 12.2 Day-1 Checklist
+### 7.2 Day-1 Checklist
 - [ ] Label allowlist & edge reject in exporters/collectors  
 - [ ] mTLS chain (agents↔collectors↔brokers↔stores), short‑lived certs  
 - [ ] Per‑tenant scopes & RBAC in gateway/store  
@@ -511,12 +511,12 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 13. Build & Implementation Plan
+## 8. Build & Implementation Plan
 
-### 13.1 Environments
+### 8.1 Environments
 - **Dev / Staging / Prod:** parity, canary tenants, synthetic load toggles.
 
-### 13.2 Delivery Milestones (fill dates)
+### 8.2 Delivery Milestones (fill dates)
 1. Architecture ready (docs/diagrams/limits) — **TBD**  
 2. Foundations (VPC, EKS or AMP, S3, IAM, KMS) — **TBD**  
 3. Pipelines up (Kinesis/Firehose/OpenSearch) — **TBD**  
@@ -526,7 +526,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 7. Security sign‑off — **TBD**  
 8. Go‑live — **TBD**
 
-### 13.3 RACI (example)
+### 8.3 RACI (example)
 | Task | Eng | SRE | Sec | PM | Owner |
 |---|---:|---:|---:|---:|---:|
 | Network / VPC / SGs | R | A | C | I |  |
@@ -538,26 +538,26 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 14. Operations
+## 9. Operations
 
-### 14.1 Runbooks (link/add later)
+### 9.1 Runbooks (link/add later)
 - Freshness breach  
 - Query slowness  
 - Cardinality spike  
 - AZ/broker failure  
 - Data loss suspected
 
-### 14.2 SRE On-call
+### 9.2 SRE On-call
 - **Coverage model:** _(fill)_  
 - **Escalation path:** _(fill)_  
 - **Status comms:** Slack / Email / StatusPage
 
-### 14.3 Change Management
+### 9.3 Change Management
 - IaC + PR reviews; blue/green or canary for agents & pipelines; rollback criteria.
 
 ---
 
-## 15. Capacity Tests & Readiness Gates
+## 10. Capacity Tests & Readiness Gates
 
 **Ship on measured reality. Use production‑like labels & histogram buckets.**
 
@@ -577,7 +577,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 16. Cost & FinOps (initial)
+## 11. Cost & FinOps (initial)
 
 - **Major cost drivers:** S3 storage & requests, query/read ops, OpenSearch hot nodes, Kinesis/MSK throughput.  
 - **Levers:** downsampling, lifecycle policies, cache hit ratio, query limits, log sampling, cold formats (Parquet/ORC).  
@@ -591,7 +591,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 17. Risks & Mitigations
+## 12. Risks & Mitigations
 
 | Risk | Impact | Likelihood | Mitigation |
 |---|---|---:|---|
@@ -603,7 +603,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 18. Open Questions
+## 13. Open Questions
 - Regions final?  
 - AMP vs Mimir decision?  
 - Tracing required at day‑1?  
@@ -612,7 +612,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 19. Appendices (to attach later)
+## 14. Appendices (to attach later)
 - **A.** Architecture diagrams (current, target)  
 - **B.** Label schema & lint rules  
 - **C.** Recording rules catalog  
@@ -624,16 +624,16 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 20. Improvements Adornment (reference-only, out of scope for Day-1)
+## 15. Improvements Adornment (reference-only, out of scope for Day-1)
 
-### 20.1 Immutable Golden Images (deterministic rollouts)
+### 15.1 Immutable Golden Images (deterministic rollouts)
 - Pre‑baked OS images with exporters/ADOT/Fluent Bit, SBOMs, signatures, read‑only FS, cloud‑init last‑mile.  
 - Health gate `/ready?exporters=ok&wg=ok&xdp=ok`; start‑time SLO: **p95 power→metrics < 60s**.  
 - Rollouts via ASG instance‑refresh; fast rollback by image version.
 
-### 20.2 Cilium + Hubble & eBPF summaries
+### 15.2 Cilium + Hubble & eBPF summaries
 - L3–L7 flow visibility; eBPF histograms (runqlat, tcpretrans, biolatency) **≤3% CPU** budget; XDP drop/shape junk traffic early.  
 - Dashboards: overlay_xdp_drops_total, overlay_peer_rtt_ms, overlay_peer_loss_ppm.
 
-### 20.3 Firecracker microVM sidecars (agent isolation)
+### 15.3 Firecracker microVM sidecars (agent isolation)
 - ADOT/Fluent Bit/exporters inside microVMs; dedicate **0.5–1 vCPU** & RAM slice; independent lifecycle; near‑container boot times **(<5s P95)**.
