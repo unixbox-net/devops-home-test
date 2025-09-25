@@ -6,7 +6,6 @@
 
 The Socket Monitoring Tool is a powerful and lightweight solution designed for system administrators who need real-time insights into socket-level network activity on their systems. By leveraging eBPF, this tool provides detailed logs of connection states, including source and destination IP addresses, ports, process IDs (PIDs), and associated commands (COMM), as well as TCP state transitions.
 
-```plaintext
 FEATURES:
 Captures TCP state changes (inet_sock_set_state tracepoint).
 Monitors key TCP connection states like SYN_SENT, FIN_WAIT, and TIME_WAIT.
@@ -34,7 +33,7 @@ IP4 only (wip)
 Need to add Dynamic Filters / pid/ip/ports
 Enhance Error Handling
 Perfomance Tuning
-```
+
 ## Use Cases
 
 Security Monitoring: Detect suspicious or unauthorized network activity.
@@ -44,12 +43,12 @@ Real-Time Monitoring: Observe live network activity without the complexity of to
 
 ## Install
 For the script version simply ensure you have python 3.11+
-```plaintext
+
 pip install bcc
 python3 /root/scripts/socket-snoop.py
-```
+
 or as a service 
-```plaintext
+
 cat <<EOF > /etc/systemd/system/sockets-monitor.service
 [Unit]
 Description=Socket Monitoring Service
@@ -69,19 +68,19 @@ Environment=PYTHONUNBUFFERED=1
 [Install]
 WantedBy=multi-user.target
 EOF
-```
+
 and
-```plaintext
+
 systemctl daemon-reload
 systemctl enable sockets-monitor
 systemctl start sockets-monitor
 systemctl status sockets-monitor
-```
+
 
 ### Log Examples
 
 Sample: /var/log/socket_monitor.log
-```plaintext
+
 Dec 30 2024 22:05:25.454 State Change: SRC=10.100.10.150:39134 DST=10.100.10.202:8000 PID=30512 COMM=audacious STATE=Connection Closing (FIN_WAIT1)
 Dec 30 2024 22:05:25.455 State Change: SRC=10.100.10.150:39134 DST=10.100.10.202:8000 PID=30512 COMM=audacious STATE=Connection Closed
 Dec 30 2024 22:05:25.455 State Change: SRC=10.100.10.150:0 DST=10.100.10.202:8000 PID=30512 COMM=audacious STATE=Connection Opening (SYN_SENT)
@@ -102,14 +101,10 @@ Dec 30 2024 22:05:32.526 State Change: SRC=10.100.10.150:53046 DST=185.199.108.1
 Dec 30 2024 22:05:32.526 State Change: SRC=10.100.10.150:34984 DST=185.199.108.154:443 PID=3678 COMM=Chrome_ChildIOT STATE=Connection Closing (FIN_WAIT1)
 Dec 30 2024 22:05:32.526 State Change: SRC=10.100.10.150:34994 DST=185.199.108.154:443 PID=3678 COMM=Chrome_ChildIOT STATE=Connection Closing (FIN_WAIT1)
 
-```
-
 ### Breakdown's
 
 Example 1:
-```plaintext
 Dec 30 2024 13:44:03.309 Connection Established: SRC=10.100.10.150:59660 DST=104.18.34.222:443 PID=0 COMM=swapper/7
-```
 
 *  Timestamp: Dec 30 2024 13:44:03.309
 *  Event Type: Connection Established
@@ -119,9 +114,8 @@ Dec 30 2024 13:44:03.309 Connection Established: SRC=10.100.10.150:59660 DST=104
 *  Command Name (COMM): swapper/7 (kernel idle thread for CPU core 7)
 
 Example 2:
-```plaintext
+
 Dec 30 2024 13:44:03.345 Connection Opening (SYN_SENT): SRC=10.100.10.150:0 DST=35.244.154.8:443 PID=3382 COMM=Chrome_ChildIOT
-```
 
 *  Timestamp: Dec 30 2024 13:44:03.345
 *  Event Type: Connection Opening (SYN_SENT)
@@ -131,7 +125,7 @@ Dec 30 2024 13:44:03.345 Connection Opening (SYN_SENT): SRC=10.100.10.150:0 DST=
 *  Command Name (COMM): Chrome_ChildIOT (child process of Chrome browser)
 
 Example 3:
-```plaintext
+
 Monitoring socket connections with enhanced metrics. Logs will be written to /var/log/socket_monitor.log
 Dec 30 2024 22:00:46.334 State Change: SRC=10.100.10.150:22 DST=10.100.10.197:62382 PID=0 COMM=swapper/0 STATE=Connection Closing (CLOSE_WAIT)
 Dec 30 2024 22:00:46.337 State Change: SRC=10.100.10.150:22 DST=10.100.10.197:62382 PID=43190 COMM=sshd-session STATE=Connection Closing (LAST_ACK)
@@ -141,11 +135,9 @@ Dec 30 2024 22:00:46.375 State Change: SRC=10.100.10.150:22 DST=10.100.10.197:62
 Dec 30 2024 22:00:46.377 State Change: SRC=10.100.10.150:22 DST=10.100.10.197:62383 PID=0 COMM=swapper/3 STATE=Connection Closed
 Dec 30 2024 22:00:47.799 State Change: SRC=10.100.10.150:22 DST=10.100.10.197:62407 PID=0 COMM=swapper/5 STATE=Connection Established
 Dec 30 2024 22:00:47.929 State Change: SRC=10.100.10.150:22 DST=10.100.10.197:62408 PID=0 COMM=swapper/7 STATE=Connection Established
-^C
-```
 
 Connection Report:
-```plaintext
+
 Stopping monitoring...
 
 Connection Lifecycles:
@@ -161,7 +153,7 @@ Connection: 10.100.10.150:22 -> 10.100.10.197:62407
   Dec 30 2024 22:00:47.799: Connection Established
 Connection: 10.100.10.150:22 -> 10.100.10.197:62408
   Dec 30 2024 22:00:47.929: Connection Established
-```
+
 The following is an example output of the tool monitoring SSH connections (SRC=10.100.10.150:22) between a server and a client (DST=10.100.10.197):
 
 A connection lifecycle starts with an Established state, 
