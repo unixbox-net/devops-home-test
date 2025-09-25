@@ -200,14 +200,14 @@ except KeyboardInterrupt:
                                  ┌──────── Application/Tick ────────┐
                                  │ GC pauses, locks, serialization  │
                                  └──────────────────────────────────┘
-  ┌──────── Network/Peering ─────┐   ┌──────── Capacity/Matchmaking ─┐   ┌───── DNS/Geo/Policy ───┐
+  ┌──────── Network/Peering ─────┐   ┌─────── Capacity/Matchmaking ─┐   ┌───── DNS/Geo/Policy ───┐
   │ ISP congestion, peering, IX  │   │ overflow to remote DC/AZ     │   │ mis-geo, TTL, v4/v6    │
-  └───────────────────────────────┘   └──────────────────────────────┘   └────────────────────────┘
+  └──────────────────────────────┘   └──────────────────────────────┘   └────────────────────────┘
                ┌──────────── Host/Kernel/NIC ────────────┐           ┌──────── Change/Config ───────┐
                │ softirq, IRQ, ring, NUMA, fq_codel      │           │ recent deploy/policy change  │
-               └──────────────────────────────────────────┘           └──────────────────────────────┘
+               └─────────────────────────────────────────┘           └──────────────────────────────┘
                                  ┌──── DDoS/Security ────┐
-                                 │ scrubbing hairpin, QoS │
+                                 │ scrubbing hairpin, QoS│
                                  └───────────────────────┘
 ```
 
