@@ -217,11 +217,13 @@ Emit counters + histograms (no per-event series) under a strict label allowlist 
   - `histogram_quantile()` in PromQL (see same doc)  
   - *Sources:* [OTel — Exponential histograms (overview)](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponentialhistogram)
 
-  
-- **Strict label policy:** allow `{region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}`; forbid `{player_id, raw_ip, request_id, free‑text}`.  
-  - *Why:* avoid high‑cardinality blowups & PII leaks.  
-  - *Size/verify:* CI lint + edge‑time reject; alert on series growth.  
-  - *Refs:* Prometheus naming & cardinality guides; Grafana guidance.  
+- **Strict label policy:** allow `{region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}`; **forbid** `{player_id, raw_ip, request_id, free-text}`.  
+  *Why:* avoid high cardinality & PII.  
+  *Size/verify:* CI lint + edge-time reject; alert on series growth.  
+  *Sources:*  
+  - [Prometheus — Naming & labels guidance](https://prometheus.io/docs/practices/naming/)  
+  - [Prometheus — Cardinality advice](https://prometheus.io/docs/practices/instrumentation/)
+
 - **Series budget:** ≈ **300 active series/server**.  
   - *Why:* linear scaling with fleet; predictable storage & query cost.  
   - *Size/verify:* exporter self‑metric `active_series_total`; gate rollouts when > budget.  
