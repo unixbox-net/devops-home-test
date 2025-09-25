@@ -1,8 +1,6 @@
-# Technology Stack — One‑Line What/Why
+# Technology Stack
 
-Each entry: **what it is** · **what it does** · **why it fits**.
-
-## Technologies List (1‑liners)
+## Technologies List
 
 - **AWS Organizations / OUs / SCPs** — Multi-account governance with guardrails at scale; isolates blast radius and enforces policy centrally.
 - **AWS Account Vending + IAM Identity Center (SSO)** — Automated account creation and SSO access; speeds onboarding while standardizing permissions.
