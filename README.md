@@ -195,7 +195,8 @@ Start with a player reality—1,000,000 CCU roughly split across NA/EU/APAC—be
 - **Peak population:** 1,000,000 CCU, ~even split across NA/EU/APAC.  
   - *Why:* anchors shard counts, per‑region quotas, and AZ spread.  
   - *Size/verify:* regional CCU telemetry or historical curves (assume 35/35/30 if unknown).  
-  - *Refs:* Google SRE “Monitoring Distributed Systems”.  
+  -   *Source:* [Google SRE — “Monitoring Distributed Systems”](https://sre.google/sre-book/monitoring-distributed-systems/)
+
 - **Gameserver density:** ~200 CCU/server ⇒ ~5,000 servers (~1,700/region).  
   - *Why:* converts CCU into hosts → exporter/series budgets & autoscaling units.  
   - *Size/verify:* match sizes + CPU headroom per game mode; adjust after soak.  
@@ -223,6 +224,8 @@ Emit counters + histograms (no per-event series) under a strict label allowlist 
   - *Refs:* Tom Wilkie’s RED method.
 
 ### 2.3 Ingestion & Transport
+From the series budget we derive ~150k samples/s global (~50k/s/region) and size for ≥200k/s headroom. We design for 1×/3×/5× bursts, apply backpressure, and prioritize gameplay SLIs so spikes don’t cascade. A durable, quota-aware pipeline keeps data loss and dashboard lag off the critical path.
+
 - **EPS math:** `5,000 servers × 300 series ÷ 10 s ≈ 150k samples/s (global)` → **plan ≥ 200k/s** target with headroom (≈50k/s per region).  
   - *Why:* sizes ingest concurrency, WAL throughput, and broker partitions.  
   - *Verify:* synthetic **1×/3×/5×** load; watch accept rate & WAL latency.  
@@ -233,6 +236,8 @@ Emit counters + histograms (no per-event series) under a strict label allowlist 
   - *Refs:* SRE “Managing Load” & “Handling Overload”; Kafka/Kinesis tuning notes.
 
 ### 2.4 Storage & Retention
+At ~15–20 B/sample, 150k/s × 86,400 ≈ 12.96B samples/day yields ~200–260 GB/day global (hot); we budget ~500 GB/day per region (hot) for index/replica headroom. Tier metrics 10 s for ~14 d (hot) → 1–5 m for ~180+ d (warm) → 5 m/1 h to ~13 mo (cold, S3/Parquet), and keep logs separate (7 d / 30 d / 365 d) with PII tokenized. This is where cost, reliability, and query speed meet.
+
 - **Capacity math (metrics, hot):** at ~15–20 B/sample, `150k/s × 86,400 s = 12.96B samples/day` ⇒ **~200–260 GB/day global**; budget **~500 GB/day/region** (hot) incl. index/replicas.  
   - *Why:* avoid surprise SSD/S3 bills; ensure compactions keep up.  
 - **Retention/tiers (metrics):** **10 s** for **7–14 d** (hot) → **1–5 m** for **30–90 d+** (warm) → **5 m / 1 h** to **≈13 mo** (cold, S3/Parquet).  
