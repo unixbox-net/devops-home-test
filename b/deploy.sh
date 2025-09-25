@@ -12,126 +12,217 @@ die()       { error_log "$*"; exit 1; }
 # CONFIG (Original + New)
 # =============================================================================
 
-# === ADDED: Output target (proxmox | aws | firecracker)
+# === ADDED: Output target (which platform to build/deploy to) ==================
+#   proxmox     -> build ISO, install template on Proxmox, then clone N VMs
+#   aws         -> launch an EC2 instance (Amazon Linux 2023) with bootstrap
+#   firecracker -> build a Debian rootfs + Firecracker config/run script
 TARGET="${TARGET:-proxmox}"
 
-# ISO source
-# ISO_ORIG="/root/debian-12.10.0-amd64-netinst.iso"
+# ------------------------------------------------------------------------------
+# Base installer/ISO inputs (used by Proxmox target)
+# ------------------------------------------------------------------------------
+# Path to the Debian installer ISO to customize. Netinst or DVD both OK.
+# You can override via env: ISO_ORIG=/path/to/iso.iso
+# Example: /root/debian-13.0.0-amd64-DVD-1.iso
 ISO_ORIG="${ISO_ORIG:-/root/debian-13.0.0-amd64-DVD-1.iso}"
 
-# Build workspace
-BUILD_DIR="/root/build"
-CUSTOM_DIR="$BUILD_DIR/custom"
-MOUNT_DIR="/mnt/build"
-DARKSITE_DIR="$CUSTOM_DIR/darksite"
-PRESEED_FILE="preseed.cfg"
-OUTPUT_ISO="$BUILD_DIR/base.iso"
-FINAL_ISO="/root/clone.iso"
+# Working directories for ISO customization and darksite payload.
+BUILD_DIR="/root/build"                 # scratch workspace (will be wiped each run)
+CUSTOM_DIR="$BUILD_DIR/custom"          # ISO files copied here for edits
+MOUNT_DIR="/mnt/build"                  # temporary mount point for original ISO
+DARKSITE_DIR="$CUSTOM_DIR/darksite"     # payload injected into ISO or rootfs
+PRESEED_FILE="preseed.cfg"              # Debian preseed filename inside ISO
+OUTPUT_ISO="$BUILD_DIR/base.iso"        # intermediate ISO path
+FINAL_ISO="/root/clone.iso"             # final ISO uploaded to Proxmox
 
-# Cluster target (Proxmox)
-INPUT="${INPUT:-1}"           # 1|fiend, 2|dragon, 3|lion
+# ------------------------------------------------------------------------------
+# Cluster target (Proxmox-only identifiers)
+# ------------------------------------------------------------------------------
+# Which Proxmox host to target by a simple selector:
+#   1|fiend, 2|dragon, 3|lion  (maps to fixed IPs below)
+INPUT="${INPUT:-1}"
+
+# Proxmox VMID for the base template VM to create from the ISO.
 VMID="${VMID:-1002}"
-VMNAME="${VMNAME:-test}"      # short base name; domain added below
 
-# Domain
+# Short base name for the VM/template (domain appended to form FQDN).
+# Must be DNS-safe (letters/digits/dashes) — script normalizes it.
+VMNAME="${VMNAME:-test}"
+
+# ------------------------------------------------------------------------------
+# Domain and naming
+# ------------------------------------------------------------------------------
+# DNS domain appended to VMNAME (e.g., "test.unixbox.net").
 DOMAIN="${DOMAIN:-unixbox.net}"
 
+# ------------------------------------------------------------------------------
 # Storage choices (Proxmox)
-VM_STORAGE="${VM_STORAGE:-void}"           # ceph {void} zfs {local-zfs} storage (fireball)
-ISO_STORAGE="${ISO_STORAGE:-local}"        # dir storage for ISO
+# ------------------------------------------------------------------------------
+# VM_STORAGE: Proxmox storage backend for VM disks.
+#   Examples: "void" (Ceph RBD), "local-zfs" (ZFS), "fireball" (custom).
+VM_STORAGE="${VM_STORAGE:-void}"
 
-# Disk / CPU / RAM (Proxmox)
-DISK_SIZE_GB="${DISK_SIZE_GB:-32}"
-MEMORY_MB="${MEMORY_MB:-4096}"
-CORES="${CORES:-4}"
+# ISO_STORAGE: Proxmox directory-like storage for ISOs.
+#   Typically "local" on the Proxmox node.
+ISO_STORAGE="${ISO_STORAGE:-local}"
 
-# Installer networking (Proxmox)
-NETWORK_MODE="${NETWORK_MODE:-static}"     # static | dhcp
-STATIC_IP="${STATIC_IP:-10.100.10.111}"
-NETMASK="${NETMASK:-255.255.255.0}"
-GATEWAY="${GATEWAY:-10.100.10.1}"
+# ------------------------------------------------------------------------------
+# Base VM resources (Proxmox template) — used to install the template
+# ------------------------------------------------------------------------------
+DISK_SIZE_GB="${DISK_SIZE_GB:-32}"      # Disk size (GB) for template root disk
+MEMORY_MB="${MEMORY_MB:-4096}"          # RAM for template install (MB)
+CORES="${CORES:-4}"                     # vCPU count for template install
+
+# ------------------------------------------------------------------------------
+# Installer networking for the template (Proxmox base VM)
+# ------------------------------------------------------------------------------
+# NETWORK_MODE: "static" or "dhcp" for the installer environment.
+NETWORK_MODE="${NETWORK_MODE:-static}"
+STATIC_IP="${STATIC_IP:-10.100.10.111}" # Used if NETWORK_MODE=static
+NETMASK="${NETMASK:-255.255.255.0}"     # Netmask for static config
+GATEWAY="${GATEWAY:-10.100.10.1}"       # Default gateway for static config
+# Space-separated list of DNS resolvers for the installer
 NAMESERVER="${NAMESERVER:-10.100.10.2 10.100.10.3 1.1.1.1 8.8.8.8}"
 
-# Cloud-Init toggle for clones (Proxmox)
+# ------------------------------------------------------------------------------
+# Cloud-Init and VLAN for clones (Proxmox)
+# ------------------------------------------------------------------------------
+# USE_CLOUD_INIT: if true, clones get a cloud-init disk and ipconfig set.
 USE_CLOUD_INIT="${USE_CLOUD_INIT:-true}"
+
+# Optional VLAN tag for the clone NIC (empty = no VLAN tag).
 CLONE_VLAN_ID="${CLONE_VLAN_ID:-}"
 
-# Clone fanout (Proxmox)
-NUM_CLONES="${NUM_CLONES:-3}"
-BASE_CLONE_VMID="${BASE_CLONE_VMID:-3000}"
-BASE_CLONE_IP="${BASE_CLONE_IP:-$STATIC_IP}"
-CLONE_MEMORY_MB="${CLONE_MEMORY_MB:-4096}"
-CLONE_CORES="${CLONE_CORES:-4}"
+# ------------------------------------------------------------------------------
+# Clone fanout plan (Proxmox) — how many clones and their base IDs/IPs
+# ------------------------------------------------------------------------------
+NUM_CLONES="${NUM_CLONES:-3}"           # Number of clones to create from template
+BASE_CLONE_VMID="${BASE_CLONE_VMID:-3000}" # First VMID to use for clones (increments)
+BASE_CLONE_IP="${BASE_CLONE_IP:-$STATIC_IP}" # Starting IP for clones (last octet increments)
+CLONE_MEMORY_MB="${CLONE_MEMORY_MB:-4096}"   # RAM per clone (MB)
+CLONE_CORES="${CLONE_CORES:-4}"              # vCPU per clone
 
-# Extra disks for clones (Proxmox)
-EXTRA_DISK_COUNT="${EXTRA_DISK_COUNT:-0}"
-EXTRA_DISK_SIZE_GB="${EXTRA_DISK_SIZE_GB:-10}"
-EXTRA_DISK_TARGET="${EXTRA_DISK_TARGET:-}"
+# ------------------------------------------------------------------------------
+# Optional extra data disks per clone (Proxmox)
+# ------------------------------------------------------------------------------
+EXTRA_DISK_COUNT="${EXTRA_DISK_COUNT:-0}"     # Number of extra disks to attach to each clone
+EXTRA_DISK_SIZE_GB="${EXTRA_DISK_SIZE_GB:-10}"# Size per extra disk (GB)
+EXTRA_DISK_TARGET="${EXTRA_DISK_TARGET:-}"    # Storage (e.g., "local-zfs"); empty = skip
 
-# Install Profile: server | gnome-min | gnome-full | xfce-min | kde-min
+# ------------------------------------------------------------------------------
+# Desktop selection (for Debian install) — only if not "server"
+# ------------------------------------------------------------------------------
+# Valid: server | gnome-min | gnome-full | xfce-min | kde-min
 INSTALL_PROFILE="${INSTALL_PROFILE:-server}"
 
-# Optional extra scripts into ISO
+# ------------------------------------------------------------------------------
+# Extra scripts to include in darksite payload (copied to /usr/local/bin)
+# ------------------------------------------------------------------------------
 SCRIPTS_DIR="${SCRIPTS_DIR:-/root/custom-scripts}"
 
-# === ADDED: Darksite bootstrap controls used by all targets
+# === ADDED: Darksite bootstrap (WireGuard + Salt) — used by all targets =======
+# Enable/disable WireGuard bootstrap in guest (if variables are provided).
 WG_ENABLE="${WG_ENABLE:-true}"
+
+# WireGuard interface name inside guest (usually wg0).
 WG_INTERFACE="${WG_INTERFACE:-wg0}"
-WG_PRIVATE_KEY="${WG_PRIVATE_KEY:-}"         # leave empty to generate
-WG_PUBLIC_KEY_PEER="${WG_PUBLIC_KEY_PEER:-}" # optional (peer)
-WG_PEER_ENDPOINT="${WG_PEER_ENDPOINT:-}"     # host:port
+
+# Private key for the guest peer. If empty, it will be generated in-place.
+WG_PRIVATE_KEY="${WG_PRIVATE_KEY:-}"
+
+# The *remote* peer’s public key (e.g., your hub/exit peer). Optional but
+# needed if you want the guest to connect on first boot.
+WG_PUBLIC_KEY_PEER="${WG_PUBLIC_KEY_PEER:-}"
+
+# Remote endpoint "host:port" (e.g., vpn.example.com:51820). Required to dial out.
+WG_PEER_ENDPOINT="${WG_PEER_ENDPOINT:-}"
+
+# AllowedIPs for the peer (what to route via WG). Common: "0.0.0.0/0" or site subnets.
 WG_ALLOWED_IPS="${WG_ALLOWED_IPS:-0.0.0.0/0}"
+
+# Address assigned to the guest WireGuard interface.
 WG_ADDRESS="${WG_ADDRESS:-10.42.0.2/32}"
+
+# DNS resolver(s) to push into WireGuard interface (optional).
 WG_DNS="${WG_DNS:-1.1.1.1}"
 
+# Salt Minion bootstrap toggle. If true, salt-minion is installed+enabled.
 SALT_ENABLE="${SALT_ENABLE:-true}"
+
+# Salt Master hostname or IP the minion should connect to.
 SALT_MASTER="${SALT_MASTER:-salt.unixbox.net}"
+
+# Optional explicit minion ID (defaults to FQDN if empty).
 SALT_MINION_ID="${SALT_MINION_ID:-}"
 
-# === ADDED: AWS knobs (will only be read when TARGET=aws)
-AWS_REGION="${AWS_REGION:-ca-central-1}"
-AWS_PROFILE="${AWS_PROFILE:-}"
-AWS_INSTANCE_NAME="${AWS_INSTANCE_NAME:-multi-target-micro}"
-AWS_INSTANCE_TYPE="${AWS_INSTANCE_TYPE:-t2.micro}"
-AWS_ARCH="${AWS_ARCH:-x86_64}"                      # x86_64|arm64
-AWS_OS_IMAGE="${AWS_OS_IMAGE:-al2023}"              # al2023
-AWS_SUBNET_ID="${AWS_SUBNET_ID:-}"                  # optional
-AWS_ASSOC_PUBLIC_IP="${AWS_ASSOC_PUBLIC_IP:-auto}"  # auto|true|false
-AWS_SG_NAME="${AWS_SG_NAME:-${AWS_INSTANCE_NAME}-sg}"
-AWS_ENABLE_SSH="${AWS_ENABLE_SSH:-true}"
-AWS_OPEN_HTTP="${AWS_OPEN_HTTP:-false}"
-AWS_OPEN_HTTPS="${AWS_OPEN_HTTPS:-false}"
-AWS_SSH_CIDR="${AWS_SSH_CIDR:-}"                    # optional override
-AWS_KEY_NAME="${AWS_KEY_NAME:-${AWS_INSTANCE_NAME}-key}"
-AWS_PUBLIC_KEY_PATH="${AWS_PUBLIC_KEY_PATH:-}"       # recommended
-AWS_SAVE_PEM="${AWS_SAVE_PEM:-${AWS_KEY_NAME}.pem}"
-AWS_SSH_USER="${AWS_SSH_USER:-ec2-user}"
-AWS_AUTO_SSH="${AWS_AUTO_SSH:-false}"
-AWS_EXTRA_TAGS="${AWS_EXTRA_TAGS:-Owner=ops,Env=dev}"
-AWS_KMS_KEY_ID="${AWS_KMS_KEY_ID:-}"                # optional for EBS
+# === ADDED: AWS knobs (only read when TARGET=aws) ==============================
+AWS_REGION="${AWS_REGION:-ca-central-1}"         # Region to deploy into
+AWS_PROFILE="${AWS_PROFILE:-}"                   # Optional named profile
+AWS_INSTANCE_NAME="${AWS_INSTANCE_NAME:-multi-target-micro}"  # EC2 Name tag
+AWS_INSTANCE_TYPE="${AWS_INSTANCE_TYPE:-t2.micro}"            # Instance type
+AWS_ARCH="${AWS_ARCH:-x86_64}"                   # x86_64 | arm64 (affects AMI param path)
+AWS_OS_IMAGE="${AWS_OS_IMAGE:-al2023}"           # Amazon Linux 2023 (supported here)
+AWS_SUBNET_ID="${AWS_SUBNET_ID:-}"               # Optional; default VPC’s first subnet if empty
+AWS_ASSOC_PUBLIC_IP="${AWS_ASSOC_PUBLIC_IP:-auto}" # auto|true|false for public IP association
+AWS_SG_NAME="${AWS_SG_NAME:-${AWS_INSTANCE_NAME}-sg}"         # Security group to create/use
+AWS_ENABLE_SSH="${AWS_ENABLE_SSH:-true}"         # Open tcp/22 from your /32
+AWS_OPEN_HTTP="${AWS_OPEN_HTTP:-false}"          # Also open tcp/80 (from your /32)
+AWS_OPEN_HTTPS="${AWS_OPEN_HTTPS:-false}"        # Also open tcp/443 (from your /32)
+AWS_SSH_CIDR="${AWS_SSH_CIDR:-}"                 # Override detected /32 (e.g., "203.0.113.7/32")
+AWS_KEY_NAME="${AWS_KEY_NAME:-${AWS_INSTANCE_NAME}-key}"      # EC2 key pair name
+AWS_PUBLIC_KEY_PATH="${AWS_PUBLIC_KEY_PATH:-}"   # If set, import this public key
+AWS_SAVE_PEM="${AWS_SAVE_PEM:-${AWS_KEY_NAME}.pem}" # If creating a new key pair, save PEM here
+AWS_SSH_USER="${AWS_SSH_USER:-ec2-user}"         # Default SSH user for AL2023
+AWS_AUTO_SSH="${AWS_AUTO_SSH:-false}"            # Auto SSH after boot (if public IP present)
+AWS_EXTRA_TAGS="${AWS_EXTRA_TAGS:-Owner=ops,Env=dev}" # Comma list "K=V,K=V" extra tags
+AWS_KMS_KEY_ID="${AWS_KMS_KEY_ID:-}"             # Optional CMK for EBS encryption (else default)
 
-# === ADDED: Firecracker knobs (TARGET=firecracker)
+# === ADDED: Firecracker knobs (only read when TARGET=firecracker) =============
+# Directory used to assemble the rootfs tree before packing (if needed).
 FC_ROOTFS_DIR="${FC_ROOTFS_DIR:-$BUILD_DIR/fcroot}"
+
+# Output path for the ext4 root filesystem image.
 FC_IMG="${FC_IMG:-$BUILD_DIR/rootfs.ext4}"
-FC_IMG_SIZE_MB="${FC_IMG_SIZE_MB:-2048}"            # 2 GB default
+
+# Size of the rootfs image in MB (2048 = 2GB).
+FC_IMG_SIZE_MB="${FC_IMG_SIZE_MB:-2048}"
+
+# Kernel package to install into the rootfs (when building a Debian userland).
 FC_KERNEL_PKG="${FC_KERNEL_PKG:-linux-image-amd64}"
+
+# Path to a host kernel image compatible with Firecracker (uncompressed vmlinux preferred).
+# You can copy/convert your kernel to this path before running, or leave default if valid.
 FC_VMLINUX_PATH="${FC_VMLINUX_PATH:-/boot/vmlinux-$(uname -r)}"
+
+# Where to copy/write the kernel image that Firecracker will actually use.
 FC_OUTPUT_VMLINUX="${FC_OUTPUT_VMLINUX:-$BUILD_DIR/vmlinux}"
+
+# Generated run helper script to start Firecracker with the produced config.
 FC_RUN_SCRIPT="${FC_RUN_SCRIPT:-$BUILD_DIR/run-fc.sh}"
+
+# Generated Firecracker configuration JSON (machine, net, drives, boot).
 FC_CONFIG_JSON="${FC_CONFIG_JSON:-$BUILD_DIR/fc.json}"
+
+# Host TAP interface to bridge host<->guest networking for Firecracker.
 FC_TAP_IF="${FC_TAP_IF:-fc-tap0}"
+
+# Guest IP (CIDR) configured via kernel boot args or init; same /24 as host gateway.
 FC_GUEST_IP="${FC_GUEST_IP:-172.20.0.2/24}"
+
+# Host-side gateway IP on the TAP interface (no CIDR suffix here).
 FC_GW_IP="${FC_GW_IP:-172.20.0.1}"
 
 # =============================================================================
 # Compute / Validate basics (Original)
 # =============================================================================
 
+# Normalize VMNAME to lowercase, dash-only; fail if it contains invalid chars.
 VMNAME_CLEAN="${VMNAME//[_\.]/-}"
 VMNAME_CLEAN="$(echo "$VMNAME_CLEAN" | sed 's/^-*//;s/-*$//;s/--*/-/g' | tr '[:upper:]' '[:lower:]')"
 [[ "$VMNAME_CLEAN" =~ ^[a-z0-9-]+$ ]] || die "Invalid VM name after cleanup: '$VMNAME_CLEAN'"
 VMNAME="$VMNAME_CLEAN"
 
+# Map INPUT selector to a specific Proxmox host & address (Proxmox-only).
 case "$INPUT" in
   1|fiend)  HOST_NAME="fiend.${DOMAIN}";  PROXMOX_HOST="10.100.10.225" ;;
   2|dragon) HOST_NAME="dragon.${DOMAIN}"; PROXMOX_HOST="10.100.10.226" ;;
@@ -139,6 +230,7 @@ case "$INPUT" in
   *)        die "Unknown host: $INPUT" ;;
 esac
 
+# Canonical FQDN and template name used for the base VM in Proxmox.
 BASE_FQDN="${VMNAME}.${DOMAIN}"
 BASE_VMNAME="${BASE_FQDN}-template"
 
