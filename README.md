@@ -613,7 +613,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 14. Appendices (to attach later)
+## 14. Appendices
 - **A.** Architecture diagrams (current, target)  
 - **B.** Label schema & lint rules  
 - **C.** Recording rules catalog  
@@ -625,7 +625,7 @@ Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters 
 
 ---
 
-## 15. Improvements Adornment (reference-only, out of scope for Day-1)
+## 15. Improvements Adornment
 
 ### 15.1 Immutable Golden Images (deterministic rollouts)
 - Pre‑baked OS images with exporters/ADOT/Fluent Bit, SBOMs, signatures, read‑only FS, cloud‑init last‑mile.  
