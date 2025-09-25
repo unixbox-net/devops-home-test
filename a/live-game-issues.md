@@ -1,12 +1,8 @@
 # DDO Live-Issue Story (Player Perspective)
 
-## Summary
+## **When a 12-Person Raid Becomes a Slideshow: A Player’s Account of DDO’s Lag Problem**
 
 As a long-time DDO player, prime-time raids regularly degrade into rubber-banding and input freezes despite a strong local setup, pointing to systemic server/runtime and/or network issues that have persisted across restarts and even a 64-bit migration. The studio’s limited, non-quantitative comms have built trust debt while the core experience remained unstable, pushing players to leave or avoid peak play. I would publish concrete playability SLOs, pause non-essential features until those SLOs are met, own the technical debt in a transparent roadmap (up to and including staged rewrites), and use disciplined operations with time-boxed player-first mitigations. Success is measured not by promises but by sustained improvements in **p95 action→ack**, **missed-tick %**, login reliability, and a visible reduction in community “lag” reports.
-
-
-## Title
-**When a 12-Person Raid Becomes a Slideshow: A Player’s Account of DDO’s Lag Problem**
 
 ---
 
