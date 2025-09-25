@@ -12,6 +12,9 @@
 #   # Proxmox: template + clones, control-plane via Salt, workers via Salt later
 #   TARGET=proxmox VMNAME=k8s TEMPLATE_ONLY=false NUM_CLONES=3 ./multi-target-deployer.sh
 #
+#   # Proxmox: ONE-SHOT INSTALL (no template, no clones) — single VM, start and done
+#   TARGET=proxmox ONE_SHOT=true VMID=1100 VMNAME=myapp NETWORK_MODE=static STATIC_IP=10.100.10.50 ./multi-target-deployer.sh
+#
 #   # AWS: single node that will auto-connect to Salt and apply highstate
 #   TARGET=aws AWS_INSTANCE_NAME=k8s-cp KUBE_ROLE=control-plane ./multi-target-deployer.sh
 #
@@ -58,7 +61,14 @@ FINAL_ISO="${FINAL_ISO:-/root/clone.iso}"
 # Domain + naming
 DOMAIN="${DOMAIN:-unixbox.net}"
 VMNAME="${VMNAME:-k8s}"         # base name (will be cleaned)
-TEMPLATE_ONLY="${TEMPLATE_ONLY:-false}"   # proxmox: if true, do not clone; only produce template
+
+# --- One-shot installer toggle (Proxmox only) ---
+# ONE_SHOT=true  -> create one VM, install, start it; NO template or clones; no "-template" suffix.
+# BOOT_ONLY=true -> alias for ONE_SHOT.
+ONE_SHOT="${ONE_SHOT:-${BOOT_ONLY:-false}}"
+
+# Template-only flag (legacy behavior). Ignored if ONE_SHOT=true.
+TEMPLATE_ONLY="${TEMPLATE_ONLY:-false}"
 
 # Salt master (central control + logs + inventory orchestrator)
 SALT_ENABLE="${SALT_ENABLE:-true}"
@@ -183,7 +193,11 @@ case "$INPUT" in
 esac
 
 BASE_FQDN="${VMNAME}.${DOMAIN}"
-BASE_VMNAME="${BASE_FQDN}-template"
+if [[ "$ONE_SHOT" == "true" ]]; then
+  BASE_VMNAME="${BASE_FQDN}"
+else
+  BASE_VMNAME="${BASE_FQDN}-template"
+fi
 
 log "Target=$TARGET  PMX: $HOST_NAME ($PROXMOX_HOST)  VMID=$VMID  VMNAME=$BASE_VMNAME"
 log "Storages: VM_STORAGE=$VM_STORAGE  ISO_STORAGE=$ISO_STORAGE  Disk=${DISK_SIZE_GB}G"
@@ -211,7 +225,7 @@ require_tools() {
     command -v fallocate  >/dev/null || die "fallocate missing."
     command -v mkfs.ext4  >/dev/null || die "mkfs.ext4 missing."
     command -v rsync      >/dev/null || die "rsync missing."
-  end
+  fi
 }
 
 # =============================================================================
@@ -876,6 +890,7 @@ require_tools
 if [[ "$TARGET" == "proxmox" ]]; then
   # ======================== Proxmox path ==========================
   [[ -n "$PROXMOX_HOST" ]] || die "No PROXMOX_HOST defined."
+  [[ "$ONE_SHOT" == "true" ]] && log "Proxmox ONE_SHOT mode enabled (no template/clone)."
 
   log "Uploading ISO to $PROXMOX_HOST..."
   scp -q "$FINAL_ISO" "root@${PROXMOX_HOST}:/var/lib/vz/template/iso/"
@@ -918,10 +933,16 @@ EOSSH
     sleep 20
   done
 
+  # Description text depends on ONE_SHOT and IP mode
   if [[ "$NETWORK_MODE" == "static" ]]; then
-    BASE_DESC="${BASE_FQDN}-template - ${STATIC_IP}"
+    DESC_SUFFIX="${STATIC_IP}"
   else
-    BASE_DESC="${BASE_FQDN}-template - DHCP"
+    DESC_SUFFIX="DHCP"
+  fi
+  if [[ "$ONE_SHOT" == "true" ]]; then
+    BASE_DESC="${BASE_FQDN} - ${DESC_SUFFIX}"
+  else
+    BASE_DESC="${BASE_FQDN}-template - ${DESC_SUFFIX}"
   fi
 
   log "Detach ISO; set boot=scsi0; cloudinit if enabled..."
@@ -944,20 +965,27 @@ EOSSH
     sleep 20
   done
 
-  # Convert to template & clone (unless TEMPLATE_ONLY=true)
-  if [[ "${TEMPLATE_ONLY}" == "true" ]]; then
-    log "Converting to template only (no clones)..."
-    ssh root@"$PROXMOX_HOST" "qm template $VMID"
+  # ONE_SHOT -> start the installed VM and exit; no template or clones
+  if [[ "$ONE_SHOT" == "true" ]]; then
+    log "ONE_SHOT=true -> starting single VM and finishing (no template/clone)."
+    ssh root@"$PROXMOX_HOST" "qm start $VMID"
+    log "One-shot VM started: $BASE_FQDN (VMID $VMID)."
+    log "All done (Proxmox one-shot)."
   else
-    log "Template + clone loop..."
-    export PROXMOX_HOST TEMPLATE_VMID="$VMID" VM_STORAGE USE_CLOUD_INIT DOMAIN
-    export NUM_CLONES BASE_CLONE_VMID BASE_CLONE_IP CLONE_MEMORY_MB CLONE_CORES
-    export CLONE_VLAN_ID CLONE_GATEWAY="$GATEWAY" CLONE_NAMESERVER="$NAMESERVER"
-    export VMNAME_CLEAN="$VMNAME" EXTRA_DISK_COUNT EXTRA_DISK_SIZE_GB EXTRA_DISK_TARGET
-    bash "$DARKSITE_DIR/finalize-template.sh"
+    # Convert to template & optionally clone
+    if [[ "${TEMPLATE_ONLY}" == "true" ]]; then
+      log "Converting to template only (no clones)..."
+      ssh root@"$PROXMOX_HOST" "qm template $VMID"
+    else
+      log "Template + clone loop..."
+      export PROXMOX_HOST TEMPLATE_VMID="$VMID" VM_STORAGE USE_CLOUD_INIT DOMAIN
+      export NUM_CLONES BASE_CLONE_VMID BASE_CLONE_IP CLONE_MEMORY_MB CLONE_CORES
+      export CLONE_VLAN_ID CLONE_GATEWAY="$GATEWAY" CLONE_NAMESERVER="$NAMESERVER"
+      export VMNAME_CLEAN="$VMNAME" EXTRA_DISK_COUNT EXTRA_DISK_SIZE_GB EXTRA_DISK_TARGET
+      bash "$DARKSITE_DIR/finalize-template.sh"
+    fi
+    log "All done (Proxmox)."
   fi
-
-  log "All done (Proxmox)."
 
 elif [[ "$TARGET" == "aws" ]]; then
   # =============================== AWS path ==============================
@@ -1009,7 +1037,7 @@ elif [[ "$TARGET" == "aws" ]]; then
   fi
   ami_id="$(aws_cli ssm get-parameter --name "$ami_param" --query 'Parameter.Value' --output text)"
 
-  # User data: install salt-minion + grains + (optional) wireguard + rsyslog; let Salt do the rest
+  # User data: install salt-minion + grains + (optional) wireguard + rsyslog
   read -r -d '' USERDATA <<'EOCLOUD'
 #!/bin/bash
 set -euo pipefail
@@ -1253,4 +1281,3 @@ EOS
 else
   die "Unknown TARGET='$TARGET' (use proxmox|aws|firecracker)"
 fi
-
