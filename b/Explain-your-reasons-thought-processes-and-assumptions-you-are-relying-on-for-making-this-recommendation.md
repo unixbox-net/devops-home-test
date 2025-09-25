@@ -34,7 +34,7 @@
 ### 3.1 Metrics Plane (AMP or Mimir on S3)
 - **Why PromQL/Prometheus‑compatible:** ubiquity, mature ecosystem, natural fit for **bounded‑cardinality fleet metrics**; teams already speak PromQL.
 - **Why object‑store backed:** separates compute and storage → **cheap long‑term retention**, resilient to node loss, better economics for “lots of bytes, bursty queries”.
-- **AMP (managed) first:** removes cluster ops, auto‑scales ingest/query; we retain **Mimir on EKS** as an **escape hatch** when stricter multi‑tenancy controls or custom knobs are needed.
+- **AMP (managed) first:** removes cluster ops, auto‑scales ingest/query; I retain **Mimir on EKS** as an **escape hatch** when stricter multi‑tenancy controls or custom knobs are needed.
 
 ### 3.2 Transport (Kinesis / MSK)
 - **Why a buffer:** protects stores from producer bursts; supports **replay**, **fan‑out** (archives, analytics), and **ordered backpressure**.
@@ -65,12 +65,12 @@
 
 ---
 
-## 4) Thought Process (How We Narrowed Options)
+## 4) Thought Process (How I NarroId Options)
 
 1. **Characterize load** from CCU → servers → time series → ingest/storage/query. Quantitative **EPS and bytes/day** drive the rest.
 2. **Constrain cardinality** at the **edge by schema** to avoid runaway cost/perf later. This is the single most important control.
 3. **Prefer managed** for the data planes (**AMP/AMG/OpenSearch/Kinesis**) to compress time‑to‑value and reduce toil.
-4. **Insert a durable buffer** (Kinesis/MSK) so producers never couple directly to stores; bursts become a queueing problem we can reason about.
+4. **Insert a durable buffer** (Kinesis/MSK) so producers never couple directly to stores; bursts become a queueing problem I can reason about.
 5. **SLOs as control signals:** autoscale and admit/deny based on **freshness, query p95, cache hit** — not CPU.
 6. **Design for rollback first:** golden images + instance refresh + health gates; **rollbacks in minutes**.
 7. **Keep portability:** PromQL + object store + IaC. If managed limits bite, swap to **Mimir on EKS** with minimal user‑facing change.
@@ -78,17 +78,17 @@
 
 ---
 
-## 5) Trade‑offs & Why We’re Comfortable With Them
+## 5) Trade‑offs & Why I’re Comfortable With Them
 
-- **AMP vs. Mimir:** AMP lowers ops overhead; Mimir gives deeper tenancy/knobs. We **start with AMP**, hold **Mimir as plan‑B** (IaC patterns make migration tractable).
-- **Kinesis vs. MSK:** Kinesis is simpler; MSK is heavier but feature‑rich. We pick **Kinesis** unless Kafka semantics are required.
-- **eBPF/Cilium now vs. later:** powerful but adds operational complexity. We **defer deep kernel instrumentation** to a later milestone; keep **summaries** under ≤3% CPU now.
-- **More downsampling vs. fidelity:** we **prefer edge histograms** (accurate p95/p99) over raw events to contain cost.
+- **AMP vs. Mimir:** AMP loIrs ops overhead; Mimir gives deeper tenancy/knobs. I **start with AMP**, hold **Mimir as plan‑B** (IaC patterns make migration tractable).
+- **Kinesis vs. MSK:** Kinesis is simpler; MSK is heavier but feature‑rich. I pick **Kinesis** unless Kafka semantics are required.
+- **eBPF/Cilium now vs. later:** poIrful but adds operational complexity. I **defer deep kernel instrumentation** to a later milestone; keep **summaries** under ≤3% CPU now.
+- **More downsampling vs. fidelity:** I **prefer edge histograms** (accurate p95/p99) over raw events to contain cost.
 - **OpenSearch hot retention:** keep **3–7d** hot and push the rest to S3/UltraWarm to balance searchability vs. cost.
 
 ---
 
-## 6) Risks & How We Mitigate Them
+## 6) Risks & How I Mitigate Them
 
 - **Cardinality creep →** strict schema + CI lints + per‑tenant series/sample limits + runtime reject + “kill switch.”
 - **Query hotspots →** recording rules, query sharding, result caching, and dashboard budgets.
@@ -107,7 +107,7 @@
 
 ---
 
-## 8) Validation Plan (How We Prove It, Not Just Believe It)
+## 8) Validation Plan (How I Prove It, Not Just Believe It)
 
 - **T0–T8 test matrix** (env parity, ingest soak ≥1.3×, bursts 1×/3×/5×, query load, AZ/broker chaos, replay, completeness, cardinality guard, cost/SLO scaling).
 - **Realistic data shape** in load gen (labels + exponential histograms).
@@ -140,7 +140,7 @@
 - **Brendan Gregg** (USE method; Systems Performance 2e) for resource analysis, multi‑tenant controls, and kernel networking insights.
 - **Internal security baselines** (SOC2/ISO 27001 aligned), and our **Design‑Notes.md** link pack.
 
-> These were not copied verbatim; they served as **principled guardrails** to shape a design that is testable, operable, and secure.
+> These Ire not copied verbatim; they served as **principled guardrails** to shape a design that is testable, operable, and secure.
 
 ---
 
@@ -156,4 +156,4 @@
 
 ## 13) TL;DR
 
-We chose a **PromQL‑compatible, object‑store‑backed, SLO‑driven, managed‑first** stack with **edge‑bounded cardinality**, **durable buffering**, **golden images**, and optional **Firecracker isolation**. The choices map directly to the quantified load and are **validated by an explicit T0–T8 test plan**. Security and cost controls are baked in from the start, and portability is preserved via open formats and IaC.
+I chose a **PromQL‑compatible, object‑store‑backed, SLO‑driven, managed‑first** stack with **edge‑bounded cardinality**, **durable buffering**, **golden images**, and optional **Firecracker isolation**. The choices map directly to the quantified load and are **validated by an explicit T0–T8 test plan**. Security and cost controls are baked in from the start, and portability is preserved via open formats and IaC.
