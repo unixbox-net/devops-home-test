@@ -1,23 +1,3 @@
-"""
-Proxmox
-TARGET=proxmox VMNAME=jpclone INPUT=1 VMID=1002 NUM_CLONES=3 ./multi-target-clone.sh
-
-AWS EC2 (AL2023 micro, WireGuard + Salt bootstrap via user-data)
-TARGET=aws AWS_REGION=us-west-2 AWS_INSTANCE_NAME=wg-salt-demo \
-AWS_ENABLE_SSH=true AWS_PUBLIC_KEY_PATH=~/.ssh/id_ed25519.pub \
-SALT_MASTER=salt.unixbox.net SALT_MINION_ID=aws-demo-1 \
-WG_PEER_ENDPOINT="vpn.unixbox.net:51820" WG_PUBLIC_KEY_PEER="BASE64KEY==" \
-./multi-target-clone.sh
-
-Firecracker microVM (Debian rootfs, WG + Salt installed, ready to run)
-TARGET=firecracker SALT_MASTER=salt.unixbox.net SALT_MINION_ID=fc-guest-01 \
-WG_PUBLIC_KEY_PEER="BASE64KEY==" WG_PEER_ENDPOINT="vpn.unixbox.net:51820" \
-./multi-target-clone.sh
-
-# Then run:
-sudo $BUILD_DIR/run-fc.sh
-"""
-
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -57,7 +37,7 @@ VMNAME="${VMNAME:-test}"      # short base name; domain added below
 DOMAIN="${DOMAIN:-unixbox.net}"
 
 # Storage choices (Proxmox)
-VM_STORAGE="${VM_STORAGE:-void}"           # e.g., ceph RBD storage ID
+VM_STORAGE="${VM_STORAGE:-void}"           # ceph {void} zfs {local-zfs} storage (fireball)
 ISO_STORAGE="${ISO_STORAGE:-local}"        # dir storage for ISO
 
 # Disk / CPU / RAM (Proxmox)
@@ -1332,3 +1312,4 @@ EOS
 else
   die "Unknown TARGET='$TARGET' (use proxmox|aws|firecracker)"
 fi
+
