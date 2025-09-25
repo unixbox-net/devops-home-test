@@ -40,52 +40,52 @@
 -  Amazon Athena — SQL on S3 for historical analytics; Grafana can query it too.
 
 ## Visualization, Alerting & Incident Flow
-Amazon Managed Grafana (AMG) — Dashboards for AMP/OpenSearch/Athena; SSO/RBAC; alert rules.
-Amazon CloudWatch Alarms — SLO alarms: freshness, write TTFB, query p95/p99, object-store ops/query, cache hit.
-PagerDuty / Slack (integrations) — On-call routing and incident comms.
+-  Amazon Managed Grafana (AMG) — Dashboards for AMP/OpenSearch/Athena; SSO/RBAC; alert rules.
+-  Amazon CloudWatch Alarms — SLO alarms: freshness, write TTFB, query p95/p99, object-store ops/query, cache hit.
+-  PagerDuty / Slack (integrations) — On-call routing and incident comms.
 
 ## Optional (Traces, K8s, Escape Hatches)
-AWS X-Ray (managed) or Grafana Tempo (EKS) — Distributed tracing.
-Amazon EKS (optional) — Host Tempo, synthetic prober jobs, or future self-managed metrics stack.
-Amazon ECR — Private container registry for any EKS/EC2 workloads.
-Amazon MSK (Kafka) (alternative to Kinesis) — If you need Kafka semantics/connectors.
-Grafana Mimir on EKS (alternative to AMP) — Object-store backed PromQL with finer multi-tenancy knobs.
+-  AWS X-Ray (managed) or Grafana Tempo (EKS) — Distributed tracing.
+-  Amazon EKS (optional) — Host Tempo, synthetic prober jobs, or future self-managed metrics stack.
+-  Amazon ECR — Private container registry for any EKS/EC2 workloads.
+-  Amazon MSK (Kafka) (alternative to Kinesis) — If you need Kafka semantics/connectors.
+-  Grafana Mimir on EKS (alternative to AMP) — Object-store backed PromQL with finer multi-tenancy knobs.
 
 ## Security, Identity & Governance
-mTLS (SPIFFE/SPIRE optional) — Strong identity for agents/gateways; short-lived certs.
-Secrets Manager & Parameter Store — WireGuard keys, AMP tokens, OpenSearch creds; no secrets in images.
-AWS CloudTrail + S3 Object-Lock (WORM) — Audit logs are tamper-evident and immutable.
-AWS Config / Security Hub — Conformance checks and continuous controls monitoring.
-IMDSv2-only, SSH-disabled (SSM only) — Reduce lateral movement and harden hosts.
+-  mTLS (SPIFFE/SPIRE optional) — Strong identity for agents/gateways; short-lived certs.
+-  Secrets Manager & Parameter Store — WireGuard keys, AMP tokens, OpenSearch creds; no secrets in images.
+-  AWS CloudTrail + S3 Object-Lock (WORM) — Audit logs are tamper-evident and immutable.
+-  AWS Config / Security Hub — Conformance checks and continuous controls monitoring.
+-  IMDSv2-only, SSH-disabled (SSM only) — Reduce lateral movement and harden hosts.
 
 ## CI/CD & IaC
-Terraform (or AWS CDK) — Declarative provisioning: VPC, endpoints, KMS, S3, Kinesis/Firehose, OpenSearch, AMP/AMG, ASGs.
-GitHub Actions / AWS CodeBuild — Pipelines for Packer AMIs, Terraform plans/applies, config pushes.
-Argo CD (if EKS) — GitOps for any cluster-resident services (Tempo, gateways, probes).
+-  Terraform (or AWS CDK) — Declarative provisioning: VPC, endpoints, KMS, S3, Kinesis/Firehose, OpenSearch, AMP/AMG, ASGs.
+-  GitHub Actions / AWS CodeBuild — Pipelines for Packer AMIs, Terraform plans/applies, config pushes.
+-  Argo CD (if EKS) — GitOps for any cluster-resident services (Tempo, gateways, probes).
 
 ## Data Modeling & Policy
-Prometheus Histograms (incl. OTel exponential) — Accurate p95/p99 with bounded series.
-Recording Rules — Precompute rollups, reduce query cost, improve dashboard p95.
-Label Allowlist + CI Lints — Strict schema: {region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}; reject PII and high-cardinality labels at edge.
-Per-Tenant Quotas & Limits — Samples/s, max series, query limits enforced at gateway → AMP/OpenSearch.
+-  Prometheus Histograms (incl. OTel exponential) — Accurate p95/p99 with bounded series.
+-  Recording Rules — Precompute rollups, reduce query cost, improve dashboard p95.
+-  Label Allowlist + CI Lints — Strict schema: {region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}; reject PII and high-cardinality labels at edge.
+-  Per-Tenant Quotas & Limits — Samples/s, max series, query limits enforced at gateway → AMP/OpenSearch.
 
 ## SLO Telemetry (platform health)
-Freshness metric (write→read age) — Objective “are graphs current?” indicator on all boards.
-Ingest TTFB timers (gateway) — Detect TLS/queueing issues early.
-Query Latency (AMG/AMP OS metrics) — p95/p99 targets; autoscale tied to user-visible outcomes.
-Cost Telemetry — S3 bytes/day added, OpenSearch hot shard pressure, object-store ops per query, cache hit.
+-  Freshness metric (write→read age) — Objective “are graphs current?” indicator on all boards.
+-  Ingest TTFB timers (gateway) — Detect TLS/queueing issues early.
+-  Query Latency (AMG/AMP OS metrics) — p95/p99 targets; autoscale tied to user-visible outcomes.
+-  Cost Telemetry — S3 bytes/day added, OpenSearch hot shard pressure, object-store ops per query, cache hit.
 
 ## Testing, Load & Chaos (Acceptance Gates T0–T8)
-Synthetic Producers (metrics) — Generate counters & exponential histograms with real label shapes (1×/3×/5×).
-Dashboard Replay Loaders — Simulate 200 viewers and mix of query ranges (≤12h / 7–30d).
-Chaos Scripts — Cordon/drain AZ node pools, stop gateway, shard pauses to prove replay and backpressure.
-Probes (EC2 tiny or Lambda) — Outside-in checks for freshness and ingest success.
+-  Synthetic Producers (metrics) — Generate counters & exponential histograms with real label shapes (1×/3×/5×).
+-  Dashboard Replay Loaders — Simulate 200 viewers and mix of query ranges (≤12h / 7–30d).
+-  Chaos Scripts — Cordon/drain AZ node pools, stop gateway, shard pauses to prove replay and backpressure.
+-  Probes (EC2 tiny or Lambda) — Outside-in checks for freshness and ingest success.
 
 ## Cost & FinOps Levers
-Downsampling to S3 (Glue/Lambda) — Cheap long-range queries via Athena.
-Grafana Result Cache & Query Budgets — Keep p95 low during incidents; protect caches.
-OpenSearch ILM + UltraWarm — Move logs off hot quickly without losing searchability.
-S3 Lifecycle — Transition IA/Glacier and expirations that match policy.
+-  Downsampling to S3 (Glue/Lambda) — Cheap long-range queries via Athena.
+-  Grafana Result Cache & Query Budgets — Keep p95 low during incidents; protect caches.
+-  OpenSearch ILM + UltraWarm — Move logs off hot quickly without losing searchability.
+-  S3 Lifecycle — Transition IA/Glacier and expirations that match policy.
 
 ### Improvements (Reference Add-Ons)
 
