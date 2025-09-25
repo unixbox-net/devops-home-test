@@ -1,7 +1,7 @@
 #!/bin/bash
 # MODULE 3: Create dummy Unity files
 set -euo pipefail
-source "/root/base/lib/env.sh"
+source "/root/devops-home-test/build/lib/env.sh"
 
 UNITY_DIR="$DARKSITE_DIR/opt/unityserver"
 
