@@ -1,56 +1,58 @@
-Flat list (one line per entry)
+### Technologies List
 
--  AWS Organizations / OUs / SCPs
--  AWS Account Vending + IAM Identity Center (SSO)
--  AWS CloudTrail (org-level) → S3 with Object Lock (WORM)
--  AWS Config + Conformance Packs (CIS/AWS Foundational)
--  AWS Security Hub (CIS/FSBP) + GuardDuty + Access Analyzer
--  AWS Budgets + Cost Anomaly Detection + Cost Explorer
--  Tag Policies & mandatory resource tags
--  Amazon VPC (multi-AZ)
--  Subnets (public/private/isolated) + Route Tables
--  Internet Gateway (IGW) & NAT Gateways (per-AZ)
--  Security Groups & NACLs
--  VPC Endpoints (Interface/Gateway) incl. PrivateLink for AMP/AMG/OpenSearch/Kinesis/S3/SSM/ECR/STS/CloudWatch
--  Route 53 (Private Hosted Zone) + Resolver DNS Firewall
--  AWS WAF + AWS Shield Advanced (public UIs)
--  AWS KMS (per-env CMKs, optional per-tenant BYOK)
--  AWS IAM (least-privilege roles, permission boundaries)
--  AWS Systems Manager: Session Manager, Parameter Store, Automation
--  EC2 Auto Scaling Groups (gateways, bastions, probes)
--  Amazon EKS (optional: Mimir/Tempo/probers)
--  Amazon ECR (images)
--  Packer (golden AMIs) + cloud-init + systemd
--  cosign/sigstore (image signing & attestations)
--  SBOM tooling (Syft/Grype)
--  IMDSv2-only + SSH disabled (SSM only)
--  WireGuard (overlay) on edge/gateway hosts
--  Prometheus Node Exporter (host metrics)
--  Custom Gameplay Exporter (game SLIs)
--  AWS Distro for OpenTelemetry — ADOT (agent mode)
--  Fluent Bit (logs)
--  AWS Distro for OpenTelemetry — ADOT (gateway mode) / Prometheus remote_write gateway
--  Envoy or Nginx (TLS, auth, 429/Retry-After)
--  Elastic Load Balancing (ALB/NLB as needed)
--  Amazon Kinesis Data Streams (buffer/decoupler)
--  Amazon Kinesis Firehose (logs→OpenSearch & S3)
--  Amazon Managed Service for Prometheus (AMP) (metrics hot store)
--  Grafana Mimir on EKS (optional alternative to AMP; S3-backed)
--  Amazon OpenSearch Service (logs hot + UltraWarm/Cold)
--  Amazon S3 (warm/cold metrics & logs; Parquet/ORC archives)
--  AWS Glue (catalog) + Glue ETL / AWS Lambda (downsampling jobs)
--  Amazon Athena (SQL on S3, long-range analytics)
--  Amazon Managed Grafana (AMG) (dashboards & alerts)
--  Amazon CloudWatch Alarms (SLO, freshness, cache, object-store ops)
--  PagerDuty / Slack / AWS Chatbot (incident routing)
--  AWS Fault Injection Simulator (FIS) (chaos testing)
--  Terraform (IaC) / AWS CDK (optional)
--  GitHub Actions / AWS CodeBuild / CodePipeline (CI/CD)
--  Argo CD (if EKS; GitOps)
--  AWS Backup (EC2/EBS, RDS if used) + OpenSearch snapshots to S3
--  S3 Lifecycle & Replication (CRR if allowed)
--  Amazon Service Quotas (tracking & alarms)
--  Amazon Macie (sensitive data detection on S3 archives)
+- AWS Organizations / OUs / SCPs — Multi-account governance with guardrails at scale; isolates blast radius and enforces policy centrally.
+- AWS Account Vending + IAM Identity Center (SSO) — Automated account creation and SSO access; speeds onboarding while standardizing permissions.
+- AWS CloudTrail (org-level) → S3 with Object Lock (WORM) — Tamper-evident audit trail for all API activity; meets compliance and forensics needs.
+- AWS Config + Conformance Packs (CIS/AWS Foundational) — Continuous config drift detection against baselines; proves and enforces posture.
+- AWS Security Hub (CIS/FSBP) + GuardDuty + Access Analyzer — Centralized finding aggregation, threat detection, and public-access checks; reduces risk.
+- AWS Budgets + Cost Anomaly Detection + Cost Explorer — Cost guardrails and anomaly alerts; keeps ingestion/query/storage spend predictable.
+- Tag Policies & mandatory resource tags — Enforced metadata for chargeback and access controls; enables cost allocation and automation.
+- Amazon VPC (multi-AZ) — Isolated, resilient network fabric; forms the secure perimeter for all observability services.
+- Subnets (public/private/isolated) + Route Tables — Layered network zones and routing; limits exposure and separates data paths.
+- Internet Gateway (IGW) & NAT Gateways (per-AZ) — Controlled egress without public exposure; maintains HA and patchability.
+- Security Groups & NACLs — Stateful and stateless filtering; tight east-west and north-south access for metrics/logs planes.
+- VPC Endpoints (Interface/Gateway) incl. PrivateLink for AMP/AMG/OpenSearch/Kinesis/S3/SSM/ECR/STS/CloudWatch — Private, non-internet access to AWS services; lowers risk and latency.
+- Route 53 (Private Hosted Zone) + Resolver DNS Firewall — Internal service discovery and DNS egress filtering; makes endpoints simple and safe.
+- AWS WAF + AWS Shield Advanced (public UIs) — L7 filtering and DDoS protections for Grafana or portals; keeps UIs resilient.
+- AWS KMS (per-env CMKs, optional per-tenant BYOK) — Key management and envelope encryption; isolates data cryptographically.
+- AWS IAM (least-privilege roles, permission boundaries) — Fine-grained access control; prevents over-privileged data access paths.
+- AWS Systems Manager: Session Manager, Parameter Store, Automation — SSH-less access, config storage, and runbooks; safer ops with strong audit.
+- EC2 Auto Scaling Groups (gateways, bastions, probes) — Elastic, immutable fleets for collectors and health probes; scale with load.
+- Amazon EKS (optional: Mimir/Tempo/probers) — Managed Kubernetes for self-hosted TSDB/tracing and jobs; provides knob-rich escape hatch.
+- Amazon ECR (images) — Private registry for agent/gateway/container images; integrates with IAM/KMS and EKS.
+- Packer (golden AMIs) + cloud-init + systemd — Immutable, fast-boot hosts with deterministic startup; enables cattle-style rollouts.
+- cosign/sigstore (image signing & attestations) — Supply-chain integrity for AMIs/OCI; only trusted images run.
+- SBOM tooling (Syft/Grype) — Software bill of materials and vuln scan; visibility and compliance for baked artifacts.
+- IMDSv2-only + SSH disabled (SSM only) — Strong instance identity and no open SSH; reduces lateral movement and key sprawl.
+- WireGuard (overlay) on edge/gateway hosts — Lightweight encrypted mesh for agents→gateways; simple keys and high performance.
+- Prometheus Node Exporter (host metrics) — Standard host telemetry; baseline signals for capacity/SLOs across fleets.
+- Custom Gameplay Exporter (game SLIs) — Player-centric counters/histograms (tick, action→ack); what matters to incidents.
+- AWS Distro for OpenTelemetry — ADOT (agent mode) — On-host collector for batching/retry/TLS; efficient remote_write to gateways.
+- Fluent Bit (logs) — Low-overhead log forwarder to Firehose/OpenSearch/S3; edge tokenization/redaction.
+- AWS Distro for OpenTelemetry — ADOT (gateway mode) / Prometheus remote_write gateway — Central throttle/relabel/quotas; isolates AMP from bursty edges.
+- Envoy or Nginx (TLS, auth, 429/Retry-After) — Front door for gateways; enforces mTLS, rate limits, and graceful backpressure.
+- Elastic Load Balancing (ALB/NLB as needed) — HA entry points for UIs (ALB) and TCP collectors (NLB); simplifies failover.
+- Amazon Kinesis Data Streams (buffer/decoupler) — Durable, scalable queue for metrics/logs; absorbs spikes and enables replay/fan-out.
+- Amazon Kinesis Firehose (logs→OpenSearch & S3) — Managed delivery with batching/compression; cheap, reliable log pipelines.
+- Amazon Managed Service for Prometheus (AMP) (metrics hot store) — Managed PromQL TSDB; offloads scaling/ops for 10s hot retention.
+- Grafana Mimir on EKS (optional alternative to AMP; S3-backed) — Self-managed PromQL at massive scale with tighter multi-tenancy controls.
+- Amazon OpenSearch Service (logs hot + UltraWarm/Cold) — Searchable logs with ILM tiers; quick investigations plus low-cost retention.
+- Amazon S3 (warm/cold metrics & logs; Parquet/ORC archives) — Durable, cheap object store; powers long-range analytics and backups.
+- AWS Glue (catalog) + Glue ETL / AWS Lambda (downsampling jobs) — Schema/catalog and ETL to Parquet; enables Athena-friendly rollups.
+- Amazon Athena (SQL on S3, long-range analytics) — Serverless queries over S3 archives; ad-hoc analysis without clusters.
+- Amazon Managed Grafana (AMG) (dashboards & alerts) — Central visualization with SSO/RBAC; unified views across AMP/OS/Athena.
+- Amazon CloudWatch Alarms (SLO, freshness, cache, object-store ops) — Native alerting on platform health KPIs; ties autoscale to outcomes.
+- PagerDuty / Slack / AWS Chatbot (incident routing) — Fast human loop closure; pages the right team with context.
+- AWS Fault Injection Simulator (FIS) (chaos testing) — Safe, controlled failures (AZ/broker/ingester); proves resilience gates.
+- Terraform (IaC) / AWS CDK (optional) — Repeatable provisioning and drift detection; infra as reviewed code.
+- GitHub Actions / AWS CodeBuild / CodePipeline (CI/CD) — Build/test/deploy automation for AMIs, agents, and Terraform; shortens MTTR.
+- Argo CD (if EKS; GitOps) — Declarative sync and rollbacks for cluster workloads; versioned operations.
+- AWS Backup (EC2/EBS, RDS if used) + OpenSearch snapshots to S3 — Policy-based backups and point-in-time recovery; protects state.
+- S3 Lifecycle & Replication (CRR if allowed) — Tiering to IA/Glacier and cross-Region copies; cost control and DR.
+- Amazon Service Quotas (tracking & alarms) — Monitors capacity limits (e.g., Kinesis shards); avoids hidden scaling caps.
+- Amazon Macie (sensitive data detection on S3 archives) — ML-backed PII discovery; validates that archives remain compliant.
+
+
 
 Why / purpose (grouped)
 
