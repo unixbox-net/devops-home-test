@@ -1,7 +1,5 @@
 # Technology Stack
 
-## Technologies List
-
 - **AWS Organizations / OUs / SCPs** — Multi-account governance with guardrails at scale; isolates blast radius and enforces policy centrally.
 - **AWS Account Vending + IAM Identity Center (SSO)** — Automated account creation and SSO access; speeds onboarding while standardizing permissions.
 - **AWS CloudTrail (org-level) → S3 with Object Lock (WORM)** — Tamper-evident audit trail for all API activity; meets compliance and forensics needs.
