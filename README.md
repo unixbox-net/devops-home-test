@@ -247,71 +247,152 @@ From the series budget we derive ~150k samples/s global (~50k/s/region) and size
 - [SRE Book — Handling Overload](https://sre.google/sre-book/handling-overload/)
 
 
-### 2.4 Storage & Retention
-At ~15–20 B/sample, 150k/s × 86,400 ≈ 12.96B samples/day yields ~200–260 GB/day global (hot); we budget ~500 GB/day per region (hot) for index/replica headroom. Tier metrics 10 s for ~14 d (hot) → 1–5 m for ~180+ d (warm) → 5 m/1 h to ~13 mo (cold, S3/Parquet), and keep logs separate (7 d / 30 d / 365 d) with PII tokenized. This is where cost, reliability, and query speed meet.
+### 4) Storage & retention
+At **~15–20 B/sample**, `150k/s × 86,400 ≈ 12.96B samples/day` yields **~200–260 GB/day global (hot)**; we budget **~500 GB/day per region (hot)** for index/replica headroom. Tier metrics **10 s for ~14 d (hot) → 1–5 m for ~180+ d (warm) → 5 m/1 h to ~13 mo (cold, S3/Parquet)**, and keep logs separate (**7 d / 30 d / 365 d**) with PII tokenized. This is where cost, reliability, and query speed meet.
 
-- **Capacity math (metrics, hot):** at ~15–20 B/sample, `150k/s × 86,400 s = 12.96B samples/day` ⇒ **~200–260 GB/day global**; budget **~500 GB/day/region** (hot) incl. index/replicas.  
-  - *Why:* avoid surprise SSD/S3 bills; ensure compactions keep up.  
-- **Retention/tiers (metrics):** **10 s** for **7–14 d** (hot) → **1–5 m** for **30–90 d+** (warm) → **5 m / 1 h** to **≈13 mo** (cold, S3/Parquet).  
-  - *Why:* long horizons without runaway cost; queries auto‑pick rollups.  
-  - *Verify:* recording‑rules usage; query hit ratios; compactor/store‑gateway health.  
-- **Logs:** **7 d hot (indexed)** / **30 d warm** / **365 d cold (S3)**; tokenize PII at the edge.  
-  - *Why:* investigations & compliance without polluting the metrics store.  
-- **Advanced (when ready):** compactor sizing (bigger merged blocks), query sharding + result cache, remote‑write tuning, columnar cold formats for Athena/Presto.
+- **Capacity math:** as above; plan **~500 GB/day/region (hot)** incl. index/replicas.  
+  *Why:* avoid surprise SSD/S3 bills; ensure compactions keep up.
 
-### 2.5 Query & Visualization
-- **Query SLOs:** **p95 ≤ 2 s** (≤12 h), **p99 ≤ 10 s** (7–30 d, downsampled).  
-  - *Why:* on‑call usability during incidents.  
-  - *Verify:* precompute rollups; cap range vectors; cache; throttle costly queries.  
-- **Dashboard standards:** Golden Signals per service (latency/traffic/errors/saturation) + gameplay SLIs.  
-  - *Why:* standard triage surface; operator muscle memory.
+- **Retention/tiers (metrics):** 10 s for 7–14 d (hot) → 1 m for 30–90 d (warm) → 5 m / 1 h for ~13 mo (cold).  
+  *Why:* long horizons without runaway cost; dashboards auto-pick rollups.  
+  *Verify:* recording rules in place; watch hit ratios.  
+  *Refs:*  
+  - [Prometheus — Histogram best practices](https://prometheus.io/docs/practices/histograms/)  
+  - [Prometheus — Recording rules](https://prometheus.io/docs/practices/rules/)
 
-### 2.6 SLOs & Freshness
-- **Freshness (write→read):** **p99 ≤ 10 s**.  
-  - *Why:* dashboards reflect reality quickly; guides flush/compaction policy.  
-  - *Verify:* `ingest_to_query_age_seconds` histogram + burn‑rate alerts.  
-- **Ingest TTFB:** **p99 ≤ 250–350 ms @ 1×–3×**.  
-  - *Why:* early warning for queueing/TLS/connect issues.  
-  - *Verify:* client timers + server logs; alert on sustained drift.  
-- **Optional reporting add‑ons:**  
-  - Data completeness SLO: **≥99.9%** of expected time series present per 5‑min window.  
-  - Dashboard staleness indicator: show current write→read age + data time range on each board.
+- **Logs:** **7 d hot (indexed) / 30 d warm / 365 d cold (S3)**; tokenize PII at edge.  
+  *Why:* investigations & compliance without polluting the metrics store.
 
-### 2.7 Tenancy & Quotas
-- **Policy:** split EPS by `{region, tenant}`; enforce quotas at edge → broker → ingesters → queriers; on exceed, **HTTP 429 + Retry‑After**; degrade non‑critical classes first.  
-  - *Why:* noisy‑neighbor isolation; predictable capacity.  
-- **Resource controls:** priorities (shares/weights) and limits (bandwidth/ceilings) per CPU/memory/disk I/O/network; qdiscs/BPF for shaping.  
-- **Cardinality controls:** per‑tenant **series** & **samples/s** limits; dashboards for series growth; CI lint to block forbidden labels.  
-  - *Why:* prevent TSDB blow‑ups; complements OS‑level fairness.
+**Basics**  
+- [Prometheus histograms & quantiles](https://prometheus.io/docs/practices/histograms)  
+- [Prometheus storage model (blocks, WAL, retention)](https://prometheus.io/docs/prometheus/latest/storage/)  
+- [Mimir store-gateway & bucket index](https://grafana.com/docs/mimir/latest/references/architecture/components/store-gateway/)  
+- Golden Signals: [Monitoring Distributed Systems](https://sre.google/sre-book/monitoring-distributed-systems/) and [Managing Load](https://sre.google/workbook/managing-load/)
 
-### 2.8 Security & Compliance (Essentials)
-- **Privacy by design:** no PII in metrics (schema allowlist + CI lints + runtime rejection); treat logs as sensitive; tokenize at collection.  
-- **Defense in depth:** isolate by tenant + region (logical IDs + physical S3 prefixes/buckets; per‑env KMS keys).  
-- **Fail‑safe defaults:** drop unknown labels/fields; deny on missing auth; short‑lived creds/certs.  
-- **Provable controls:** violations alert; admin/API actions are tamper‑evident (WORM S3).  
-- **Operational simplicity:** IAM/KMS‑managed primitives; immutable, signed images; SSH disabled (SSM only).  
-- **Day‑1 controls checklist:** label allowlist; mTLS agent↔collector↔broker↔store; per‑tenant scopes; KMS at rest; private subnets/WAF/strict SGs; secrets in SM/PS w/ ≤90‑day rotation; documented retention & deletion.
+**Advanced**  
+- Bigger merged blocks via compactor (fewer indexes to scan, cheaper historical reads): [Mimir compactor](https://grafana.com/docs/mimir/latest/references/architecture/components/compactor/)  
+- Query sharding + result cache: [Mimir query-frontend](https://grafana.com/docs/mimir/latest/references/architecture/components/query-frontend/)  
+- Right-size histogram strategy (server-side quantiles):  
+  [Prometheus histograms](https://prometheus.io/docs/concepts/metric_types/#histogram) and  
+  [histogram best practices](https://prometheus.io/docs/practices/histograms/)  
+- Remote-write tuning (queues, batch, retry/backoff, relabel):  
+  [Remote write best practices](https://prometheus.io/docs/practices/remote_write/) and  
+  [remote_write configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/#remote_write)
 
-### 2.8.1 Principles
-- **No PII in metrics** (enforced at edge).  
-- **Tokenize/redact logs** at collection.  
-- **mTLS everywhere; KMS at rest; least‑privilege IAM**.  
-- **Immutable images; signed artifacts; SSH disabled (SSM only)**.  
-- **Audit logs to S3 object‑lock** (WORM).
+### 5) Query & visualization
+Set query SLOs **p95 ≤ 2 s (≤12 h)** and **p99 ≤ 10 s (7–30 d)**, achieved via recording rules, caching, and query limits. Dashboards follow Golden Signals so on-call can triage quickly. Slow dashboards during incidents are as bad as no dashboards.
 
-### 2.8.2 Day-1 Controls (checklist)
-- Label allowlist & edge reject.  
-- mTLS agent↔collector↔broker↔store (short‑lived certs).  
-- Per‑tenant auth scopes/RBAC.  
-- KMS keys per environment (per‑tenant optional).  
-- Private subnets/WAF/strict SGs.  
-- Secrets in SM/PS; rotation ≤90 d.  
-- Retention & deletion process documented.  
-- Residency stance (e.g., default CA regions; replication policy).
+- **Query SLOs:** p95 ≤ 2 s (≤12 h), p99 ≤ 10 s (7–30 d).  
+  *Why:* on-call usability.  
+  *Verify:* precompute rollups; cache; cap range vectors; throttle costly queries.  
+  *Refs:*  
+  - [Amazon Managed Service for Prometheus — Query insights & controls](https://docs.aws.amazon.com/prometheus/latest/userguide/query-insights-control.html)  
+  - [AMP — Understanding query costs](https://docs.aws.amazon.com/prometheus/latest/userguide/AMP-costs.html)
 
-### 2.8.3 Minimal framework alignment
-- **NIST 800‑53 / ISO 27001:** Access control, Identification & Auth, System & Communications Protection, Audit & Accountability, Config Mgmt.  
-- **BC FOIPPA (if applicable):** default telemetry to Canada regions; document any cross‑border replication and compensating controls.
+- **Dashboard content:** latency/traffic/errors/saturation panels per service.  
+  *Why:* standard triage surface.  
+  *Ref:* [Google SRE — Four Golden Signals](https://sre.google/sre-book/monitoring-distributed-systems/)
+
+### 6) SLOs & freshness
+Commit to **write→read p99 ≤ 10 s** and **ingest TTFB p99 ≤ 250–350 ms @ 1×–3×**, with burn-rate alerts on breaches. Freshness determines whether dashboards reflect reality; these translate engineering into player-visible guarantees and anchor capacity/scaling to measurable outcomes.
+
+- **Ingest TTFB:** p99 ≤ 250–350 ms @ 1×–3×.  
+  *Why:* early warning for queueing/TLS/connect issues.  
+  *Verify:* client timers + server logs; alert on sustained drift.  
+  *Refs:*  
+  - Gregg, *Systems Performance (2e)* — Ch. 2.3.1 (pp. 24–25)  
+  - Ch. 10.5.4 (pp. 528–529)  
+  - Ch. 10.6 (socket first-byte tools)
+
+- **Freshness (write→read):** p99 ≤ 10 s.  
+  *Why:* dashboards reflect reality; guides flush/compaction policy.  
+  *Verify:* `ingest_to_query_age_seconds` histogram + burn-rate alerts.  
+  *Refs:*  
+  - Gregg, Ch. 2.3.1 (pp. 24–25)  
+  - Ch. 2.8 (p. 75)  
+  - Ch. 2.9–2.10 (pp. 77–78+)
+    
+### 7) Tenancy & quotas
+Split EPS by `{region, tenant}`, enforce quotas **edge → broker → ingesters → queriers**, return **429 + Retry-After** on exceed, and watch **cardinality** to cut off offenders. This isolates noisy neighbors and keeps capacity predictable; one team’s spike can’t blow everyone’s SLOs.
+
+- **Rationalization & enforcement:** apply **priorities** (shares/weights) and **limits** (bandwidth/ceilings) per resource; degrade non-critical classes first.  
+  *Refs (Brendan Gregg, Systems Performance 2e — page-accurate):*  
+  - Multi-tenant contention & resource controls: Ch. 11, §11.3 “OS Virtualization”, pp. 613–617  
+  - CPU: CFS shares (priority), CFS bandwidth/cpusets (limits), pp. 614–615  
+  - Memory: soft+hard limits, `memory.pressure_level` notifiers, pp. 616–617  
+  - Disk I/O: `blkio.weight` + `blkio.throttle.*` (BPS/IOPS), p. 617  
+  - Network I/O: `net_prio`/`net_cls` + qdiscs (fq/fq_codel/tbf), BPF at tc/cgroup, p. 617 and Ch. 10 pp. 520–522, 571–573
+
+- **Cardinality controls:** per-tenant **series & samples/s** limits; dashboards for series growth; CI lint to block forbidden labels.  
+  *Why:* prevent TSDB blow-ups; complements OS-level fairness.
+  
+### 8) Security & Compliance (Essentials)
+
+**Assumptions (explicit, testable)**  
+- **Data classes**  
+  - *Metrics:* low-cardinality ops data; **no PII** (enforced at edge).  
+  - *Logs:* may contain sensitive fields; **tokenize/redact at collection**.  
+- **Tenancy:** multi-team, multi-title ⇒ per-tenant isolation across ingest, query, storage.  
+- **Trust boundaries:** clients → edge collectors → stream → TSDB / log stores; some servers at third parties (treat as untrusted edges).  
+- **Crypto posture:** TLS 1.2+ in transit; AES-GCM at rest; keys in **AWS KMS**; short-lived certs/tokens.  
+- **Compliance target:** SOC 2 / ISO 27001 “lite” (access control, auditability, retention/deletion, incident response).  
+- **Ops constraints:** zero-trust-ish defaults; least privilege; automated rotation; immutable artifacts (images/config).
+
+**Design philosophy (why + how)**  
+- **Privacy by design:** keep PII out of metrics by schema; enforce with CI lint + runtime reject. Treat logs as sensitive; **tokenize at edge** before transport.  
+- **Defense in depth:** isolate by tenant + region (logical tenancy + physical separation such as **S3 prefixes/buckets**; per-env **KMS** keys).  
+- **Fail-safe defaults:** drop unknown labels/fields; deny on missing auth; short credential lifetimes.  
+- **Provable controls:** violations alert; admin/API actions are tamper-evident.  
+- **Operational simplicity:** prefer **IAM/KMS**-managed primitives and **signed, immutable images** to reduce drift.
+
+**Day-1 controls (required)**
+
+*Data shaping & collection*  
+- Metrics **label allowlist (repo-enforced):** allow `{region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}`; block `{player_id, raw_ip, email, request_id, free-text}`.  
+- Edge tokenization for logs: redact emails/IPs; hash IDs with per-env salt; **drop on parser failure**.  
+- Per-tenant quotas at collector/stream (EPS, bytes/s) → **429 + Retry-After** on exceed.
+
+*AuthN / AuthZ*  
+- **mTLS** for agent↔collector↔broker↔store; short-lived X.509 (**SPIFFE/SPIRE** or equivalent).  
+  - SPIFFE/SPIRE: <https://spiffe.io/>  
+- Per-tenant scopes (write/read) at gateway & store; separate creds per tenant.  
+- Least-privilege **IAM**: write-only to ingest; scoped read via dashboards/service accounts; no blanket admin.
+
+*Encryption*  
+- **In transit:** TLS 1.2+; HSTS on UIs.  
+- **At rest:** **KMS**-encrypted TSDB blocks, indices, S3 objects; distinct keys per environment (per-tenant keys only if required).  
+  - AWS KMS: <https://docs.aws.amazon.com/kms/latest/developerguide/overview.html>
+
+*Isolation*  
+- **Network:** collectors/brokers/stores in private subnets; minimal egress; **WAF** on public UIs; tight security groups.  
+- **Runtime:** run agents/collectors non-root, read-only FS; apply **seccomp/AppArmor** profiles.
+
+*Integrity & supply chain*  
+- **Immutable images** (Golden AMIs/OCI) with **SBOM**; sign artifacts; deploy only signed images; **IMDSv2-only**; SSH disabled (use **SSM Session Manager**).  
+  - CIS Benchmarks: <https://www.cisecurity.org/cis-benchmarks/>  
+  - AWS SSM Session Manager: <https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html>
+
+*Governance*  
+- **Retention & deletion:** metrics **14 d hot / 90 d warm / 13 mo cold**; logs **7 d / 30 d / 365 d**. Keep a documented deletion workflow with evidence (S3 inventory deltas).  
+- **Audit logging:** admin/API actions, auth successes/failures, policy rejects → ship to **S3 object-lock (WORM)**.  
+- **Secrets:** no secrets in images; **Parameter Store/Secrets Manager**; auto-rotate ≤90 d with near-expiry alerts.
+
+*Minimal framework alignment*  
+- **NIST 800-53 / ISO 27001 mapping (essentials):**  
+  - Access Control / Identification & Auth: **IAM**, per-tenant scopes, **mTLS**.  
+  - System & Communications Protection: **TLS** everywhere, **KMS** at rest, private networking.  
+  - Audit & Accountability: **CloudTrail** / audit logs to **WORM S3**.  
+  - Configuration Mgmt: **IaC** + **AWS Config**/conformance checks; **immutable images**.  
+  - AWS Security Hub standards: <https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-standards.html>  
+
+- **BC residency (FOIPPA) stance:** default telemetry to **Canada** regions; document any cross-border replication and apply compensating controls (KMS, tokenization, access logs).  
+  - FOIPPA overview: <https://www2.gov.bc.ca/gov/content/governments/services-for-government/information-management-technology/privacy>  
+
+**“Prove it” (lightweight verification)**  
+- PII guardrails test: CI injects bad labels/fields → build fails; staging agents send PII → edge drops + alert.  
+- Crypto SLOs: 100% TLS; no certs <7 days to expiry without alert.  
+- Access reviews: quarterly principal/permission review; anomaly detection on per-tenant query volumes.  
+- Deletion drills: quarterly verify hot→warm→cold→expire; show S3 inventory diffs.
 
 ### 2.9 Capacity Tests (Pass/Fail Gates)
 **Goal:** convert assumptions into verifiable gates using production‑like label sets & histogram buckets.
