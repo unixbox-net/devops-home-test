@@ -8,4 +8,4 @@
 : "${DARKSITE_DIR:=$CUSTOM_DIR/darksite}"
 : "${OUTPUT_ISO:=$BUILD_DIR/darksite-custom.iso}"
 : "${FINAL_ISO:=/root/final-darksite.iso}"
-: "${PROXMOX_HOST:=10.200.0.100}"
+: "${PROXMOX_HOST:=10.100.10.225}"
