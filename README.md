@@ -188,7 +188,8 @@ _Dashboards display current freshness and data range so operators know when grap
 ---
 
 ## 2. Assumptions / Constraints & Design Methodology
-
+Start with a player reality—1,000,000 CCU roughly split across NA/EU/APAC—because traffic drives shards, per-region quotas, and AZ spread. Converting load into hosts (~200 CCU/server ⇒ ~5,000 servers ≈ 1,700/region) makes capacity tangible and lets us budget exporter series, CPU/disk/NIC via the USE method. A 10 s emission cadence (tightened to 5 s during incidents) balances fidelity and overhead so we can see issues without creating them. This makes the rest of the design concrete and testable.
+    
 ### 2.1 Workload & Resource Analysis
 - **Peak population:** 1,000,000 CCU, ~even split across NA/EU/APAC.  
   - *Why:* anchors shard counts, per‑region quotas, and AZ spread.  
