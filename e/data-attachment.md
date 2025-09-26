@@ -28,7 +28,7 @@ This document summarizes the colored spreadsheet of shard/region metrics across 
 - [7) Recommended Follow‑Ups](#7-recommended-follow-ups)
 - [8) Appendix — Exact Bias Tables](#8-appendix--exact-bias-tables)
 - [9) Assumptions & Data Model (Working Hypotheses)](#9-assumptions--data-model-working-hypotheses)
-- [10) Initial Read — “Your Logical Guess”](#10-initial-read--your-logical-guess)
+- [10) Initial Read — “Your Logical Guess”](#10-initial-read)
 
 ---
 
@@ -204,7 +204,7 @@ Average across shards (lower = better):
 
 ---
 
-## 10) Initial Read — “Your Logical Guess”
+## 10) Initial Read
 
 1) **There was a global improvement between Period 3 → 4**, likely a config/infra rollout (latency/error reductions, tighter variability).  
 2) **Period 5 shows partial regression under higher load**, especially on shards with heavier `vol` (e.g., **Amalthea 500k**, **Kallichore 331k**).  
