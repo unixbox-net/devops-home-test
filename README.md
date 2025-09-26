@@ -19,6 +19,7 @@ This README provides an ordered **Table of Contents** for the entire repository 
 - [Design notes](b/design-notes.md)
 - [Supplemental images — server list](b/server-list.png)
 - [Supplemental images — us-west layout](b/us-west.png)
+- [demo — us-west](b/demo)
 
 ### C) Game Studio Scenario
 - [You are working with a Game Studio — response](c/You-are-working-with-a-Game-Studio.md)
