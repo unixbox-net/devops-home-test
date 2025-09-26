@@ -1,8 +1,6 @@
 # DevOps Take-Home — Repository Guide
 
-This README provides an ordered **Table of Contents** for the entire repository and maps each question to its corresponding answer file. The order mirrors the original prompt (A → E).
-
-> Note: The original **Word document** was not present in the repo. The closest canonical prompt appears to be **`devops-take-home-test.pdf`** in the repository root. The questions below are derived from that prompt and preserved via the filenames and markdown documents in this repo.
+This README provides an ordered **Table of Contents** for the entire repository and maps each question to its corresponding answer file. 
 
 ## Top-Level Index
 
