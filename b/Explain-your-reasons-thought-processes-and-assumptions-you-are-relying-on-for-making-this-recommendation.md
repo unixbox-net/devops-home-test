@@ -1,159 +1,178 @@
-# Explain-your-reasons-thought-processes-and-assumptions-you-are-relying-on-for-making-this-recommendation
+# Explain Your Reasons, Thought Processes, and Assumptions (with References)
 
-> Scope: rationale for the architecture and delivery plan of a **1,000,000‑CCU, multi‑region Reporting & Observability Platform on AWS**, including the assumptions, decision criteria, trade‑offs, and validation plan that led to the final recommendation.
-
----
-
-## 1) What I’m Optimizing For (Decision Criteria)
-
-- **Player-first outcomes:** dashboards that reflect reality quickly enough to reduce user-visible impact during incidents (freshness p99 ≤ 10s; incident MTTR driven down via faster detection + better diagnosis).
-- **Operational simplicity at scale:** preferentially use **managed services** (AMP, AMG, OpenSearch, Kinesis) to avoid undifferentiated heavy lifting, but keep **escape hatches** (Mimir/Tempo on EKS, MSK) when knobs or tenancy require.
-- **Cost predictability:** bound metric **cardinality** and enforce **downsampling/ILM/S3 lifecycle**; scale by **SLO signals** (freshness, query p95, cache hit) rather than raw utilization.
-- **Security & compliance by default:** **PII‑free metrics**, **tokenized logs**, **mTLS end‑to‑end**, **KMS‑at‑rest**, **least‑privilege IAM**, **immutable signed images**, **audit logs to WORM S3**.
-- **Portability without lock‑in:** PromQL compatibility and object‑store backed TSDBs (AMP or Mimir) so data + dashboards remain portable.
-- **Fast rollback / deterministic rollouts:** **golden images** (prebaked AMIs/OCI), **instance‑refresh blue/green**, and **health gates** make rollbacks minutes, not hours.
-- **Safety under burst:** decouple producers with **Kinesis/MSK**, add **backpressure** and **shedding order** to protect gameplay SLIs first.
+This document explains **why** the proposed Reporting & Observability Platform (AWS) looks the way it does, **how** the decisions were made, and **which sources and assumptions** were relied upon. It is designed to be auditable: every major claim links to a primary reference (AWS/Grafana/Prometheus docs, Google SRE book, standards, or vendor whitepapers).
 
 ---
 
-## 2) Core Assumptions That Shape the Design
+## 1) Goals, SLOs, and Constraints (What success looks like)
 
-- **Load shape:** ~**1M CCU**, roughly NA/EU/APAC split; **~200 CCU/server ⇒ ~5,000 servers** fleet size (≈ 1,700 per region).
-- **Emission cadence:** **10s steady**, **5s during incidents** to raise temporal resolution only when needed.
-- **Metric shapes:** **counters + (exponential) histograms only**; no per-event time series. **~300 active series/server** with a strict **label allowlist** `{region, az, cluster, shard_id, instance_type, build_id, queue, asn_bucket}` to keep PII & high-cardinality out.
-- **Throughput math (baseline):** 5,000 × (300 ÷ 10s) ≈ **150k samples/s (global)**; size for **≥200k/s** headroom, ≈ **50k/s per region**.
-- **Storage sizing (order-of-magnitude):** **15–20 B/sample** amortized ⇒ ≈ **200–260 GB/day global (hot)**; budget **~500 GB/day/region hot** including index/replica overhead.
-- **SLOs:** **Freshness p99 ≤ 10s**, **Query p95 ≤ 2s (≤12h), p99 ≤ 10s (7–30d)**, **Ingest TTFB p99 ≤ 250–350ms** @ 1×–3×.
-
-> These are explicit, testable, and feed directly into capacity tests, autoscaling signals, and cost envelopes.
-
----
-
-## 3) Why These Technologies (Reasoning Chain)
-
-### 3.1 Metrics Plane (AMP or Mimir on S3)
-- **Why PromQL/Prometheus‑compatible:** ubiquity, mature ecosystem, natural fit for **bounded‑cardinality fleet metrics**; teams already speak PromQL.
-- **Why object‑store backed:** separates compute and storage → **cheap long‑term retention**, resilient to node loss, better economics for “lots of bytes, bursty queries”.
-- **AMP (managed) first:** removes cluster ops, auto‑scales ingest/query; I retain **Mimir on EKS** as an **escape hatch** when stricter multi‑tenancy controls or custom knobs are needed.
-
-### 3.2 Transport (Kinesis / MSK)
-- **Why a buffer:** protects stores from producer bursts; supports **replay**, **fan‑out** (archives, analytics), and **ordered backpressure**.
-- **Kinesis** is operationally simpler; **MSK** is selected only if Kafka semantics/connectors are required.
-
-### 3.3 Logs (OpenSearch + S3/Glue/Athena)
-- **Why separate from metrics:** logs carry PII risk and high cardinality; keep **metrics PII‑free** and push logs to **OpenSearch (hot 3–7d)** + **S3 (warm/cold)**.
-- **ILM & UltraWarm/Cold:** reduce hot footprint; **Athena** over S3 supports cheap, long‑range investigations.
-
-### 3.4 Visualization & Alerts (AMG + CloudWatch)
-- **AMG** gives consistent RBAC/SSO and managed alerting; can query AMP, OpenSearch, and Athena in one place.
-- **CloudWatch Alarms** augment Grafana with **burn‑rate** and **platform SLO** alarms routed to PagerDuty/Slack.
-
-### 3.5 Edge & Gateways (ADOT, Fluent Bit, WireGuard)
-- **ADOT agent** for batching/retry/TLS and **remote_write**; **Fluent Bit** for low‑overhead log shipping.
-- **WireGuard overlay** provides consistent, private edge→gateway paths across heterogeneous environments.
-- **Gateway mode (ADOT/remote_write)** centralizes **quotas, relabeling, and rate control**.
-
-### 3.6 Golden Images & Firecracker (Ops determinism)
-- **Golden AMIs/OCI** with SBOM + signature → **no drift**, **fast boot**, **fast rollback** by image ID; **cloud‑init** for last‑mile only.
-- **Firecracker microVM sidecar** isolates “noisy” telemetry agents on hot hosts, preserving game CPU headroom; shares the same image pipeline.
-- These choices **directly reduce MTTR** (fast, deterministic rollouts) and align with **“cattle, not pets”**.
-
-### 3.7 Security, Identity & Governance
-- **mTLS everywhere** (SPIFFE/SPIRE optional) + **KMS at rest**, **least‑privilege IAM**, **WAF/Shield** on any public UIs.
-- **CloudTrail → S3 Object‑Lock**, **Config/Security Hub** for continuous assurance; **SSM Session Manager** for SSH‑less access.
-- **Tag policies** and **mandatory tags** enable cost allocation and policy enforcement at scale.
+- **Primary goal:** Player‑centric observability for a title peaking at **~1,000,000 CCU** with **low‑latency reporting**, enabling rapid incident triage and data‑driven rollout safety.
+- **Service Level Objectives (platform):**
+  - **Freshness (write→read)**: p99 ≤ **10 s** for hot metrics windows. Ref: AMP/Mimir best practices on ingestion & query windows ([AMP Docs](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-AWS-Managed-Prometheus.html), [Mimir Architecture](https://grafana.com/docs/mimir/latest/references/architecture/)).
+  - **Query latency**: p95 ≤ **2 s** (≤12 h windows); p99 ≤ **10 s** (7–30 d windows). Ref: Grafana query performance guidance ([Grafana Docs](https://grafana.com/docs/grafana/latest/best-practices/)) and Mimir query-frontend ([Mimir Query Frontend](https://grafana.com/docs/mimir/latest/references/architecture/components/query-frontend/)).
+  - **Ingest TTFB**: p99 ≤ **250–350 ms** at 1×–3× load (detect TLS/queueing issues early). Ref: Gregg, _Systems Performance, 2e_ (socket first byte, latency sources) ([book site](https://www.brendangregg.com/systems-performance-2nd-edition-book.html)).
+- **Security constraints:** Zero PII in metrics, mTLS in transit, KMS at rest, IAM least privilege. Refs: [AWS Well‑Architected Security Pillar](https://docs.aws.amazon.com/wellarchitected/latest/security-pillar/welcome.html), [KMS](https://docs.aws.amazon.com/kms/latest/developerguide/overview.html), [ACM](https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html).  
+- **Ops constraints:** Immutable artifacts (golden AMIs/OCI), GitOps/IaC, auditability. Refs: [Packer](https://developer.hashicorp.com/packer), [Terraform](https://developer.hashicorp.com/terraform), [Argo CD](https://argo-cd.readthedocs.io/en/stable/).
 
 ---
 
-## 4) Thought Process (How I NarroId Options)
+## 2) Core Assumptions & Sizing Model (What we assume and why)
 
-1. **Characterize load** from CCU → servers → time series → ingest/storage/query. Quantitative **EPS and bytes/day** drive the rest.
-2. **Constrain cardinality** at the **edge by schema** to avoid runaway cost/perf later. This is the single most important control.
-3. **Prefer managed** for the data planes (**AMP/AMG/OpenSearch/Kinesis**) to compress time‑to‑value and reduce toil.
-4. **Insert a durable buffer** (Kinesis/MSK) so producers never couple directly to stores; bursts become a queueing problem I can reason about.
-5. **SLOs as control signals:** autoscale and admit/deny based on **freshness, query p95, cache hit** — not CPU.
-6. **Design for rollback first:** golden images + instance refresh + health gates; **rollbacks in minutes**.
-7. **Keep portability:** PromQL + object store + IaC. If managed limits bite, swap to **Mimir on EKS** with minimal user‑facing change.
-8. **Encode safety rails:** quotas, 429/Retry‑After, label allowlist, CI lints, and explicit “kill switches” for bad metrics.
+- **Population**: ~**1,000,000 CCU**, roughly NA/EU/APAC split ⇒ drives shards, quotas, and AZ spread. Ref: SRE “Monitoring Distributed Systems” ([SRE Book](https://sre.google/sre-book/monitoring-distributed-systems/)).  
+- **Game host density**: ~**200 CCU/server** ⇒ **~5,000 servers** total (~1,700/region). Ref: Gregg’s **USE method** (size by Utilization/Saturation/Errors) ([USE Method](https://www.brendangregg.com/usemethod.html)).  
+- **Emission cadence**: **10 s** steady; **5 s** during incidents to increase resolution without overwhelming ingest. Ref: SRE tradeoffs between signal fidelity vs overhead ([SRE Book](https://sre.google/sre-book/monitoring-distributed-systems/)).
+- **Metric shapes**: **counters + histograms (incl. OTel exponential)** only; no per‑event time series; strictly bounded labels; **~300 active series per server**. Refs: Prometheus histograms ([Prom Histograms](https://prometheus.io/docs/practices/histograms/)), OTel exponential histograms ([OTel Metrics: Exponential Histograms](https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponential-histogram)).
 
----
-
-## 5) Trade‑offs & Why I’m Comfortable With Them
-
-- **AMP vs. Mimir:** AMP loIrs ops overhead; Mimir gives deeper tenancy/knobs. I **start with AMP**, hold **Mimir as plan‑B** (IaC patterns make migration tractable).
-- **Kinesis vs. MSK:** Kinesis is simpler; MSK is heavier but feature‑rich. I pick **Kinesis** unless Kafka semantics are required.
-- **eBPF/Cilium now vs. later:** poIrful but adds operational complexity. I **defer deep kernel instrumentation** to a later milestone; keep **summaries** under ≤3% CPU now.
-- **More downsampling vs. fidelity:** I **prefer edge histograms** (accurate p95/p99) over raw events to contain cost.
-- **OpenSearch hot retention:** keep **3–7d** hot and push the rest to S3/UltraWarm to balance searchability vs. cost.
+### Derived capacity
+- **EPS math**: 5,000 servers × 300 series ÷ 10 s ≈ **150k samples/s** (global) ≈ **50k/s per region**. Plan ≥30% headroom ⇒ target **≥200k/s global**.  
+- **Storage**: ~15–20 B/sample ⇒ ~**200–260 GB/day** (global hot). Budget **~500 GB/day/region** to cover index/replicas/overhead. Refs: Prometheus storage model ([Prom Storage](https://prometheus.io/docs/prometheus/latest/storage/)), Mimir object‑store architecture ([Mimir Store‑Gateway](https://grafana.com/docs/mimir/latest/references/architecture/components/store-gateway/)).
 
 ---
 
-## 6) Risks & How I Mitigate Them
+## 3) Design Method (How choices were made)
 
-- **Cardinality creep →** strict schema + CI lints + per‑tenant series/sample limits + runtime reject + “kill switch.”
-- **Query hotspots →** recording rules, query sharding, result caching, and dashboard budgets.
-- **Compactor/store‑gateway lag →** compaction backlog SLOs, bucket‑index health, and scaling policies.
-- **Burst storms →** streaming buffer + shedding order (verbose logs first) + backpressure + replay drills.
-- **Cost drift →** daily bytes‑added by tier, object‑store ops/query alarms, cache hit SLO, ILM/S3 lifecycle.
-- **Security drift →** Config/Hub controls, CloudTrail with S3 Object‑Lock, periodic access review, key/cert rotation SLOs.
-
----
-
-## 7) Why This Meets the SLO & Security Requirements
-
-- **SLOs:** Freshness p99 ≤ 10s is enforced from agent → buffer → store, measured as **write→read age** and tied to autoscaling; **Query p95 ≤ 2s** is achieved via **recording rules + cache** and query budgets.
-- **Security:** **end‑to‑end encryption** (TLS/mTLS), **KMS at rest**, **SSM w/ SSH disabled**, **private VPC endpoints**, **WAF/Shield** for any public UI, and **immutable, signed images** satisfying change integrity.
-- **MTTR objective (aggressive):** golden images + instance refresh + fast health gates + optional Firecracker isolation shorten deploy/rollback cycles and reduce blast radius.
+1. **Start from user outcomes** (player‑felt SLIs): tick health, action→ack, join errors (RED method) ([Grafana RED](https://grafana.com/blog/2018/08/02/the-red-method-how-to-instrument-your-services/)).  
+2. **Bound cardinality at the edge**: schema allowlist; CI linting; runtime reject of PII/high‑cardinality labels ([Prom Naming/Cardinality](https://prometheus.io/docs/practices/naming/)).  
+3. **Decouple via streams**: **Kinesis** (or **MSK**) buffers bursts, enables replay, and multi‑sink fan‑out ([Kinesis Data Streams](https://docs.aws.amazon.com/streams/latest/dev/introduction.html), [Amazon MSK](https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html)).  
+4. **Object‑store‑backed TSDB**: **AMP** (managed) or **Mimir on EKS**, with recording rules, query‑frontend, and caches ([AMP](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-AWS-Managed-Prometheus.html), [Mimir Architecture](https://grafana.com/docs/mimir/latest/references/architecture/)).  
+5. **Tiered retention**: hot 10s; warm downsampled 1–5m; cold Parquet/ORC on S3 with Athena ([S3 Lifecycle](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html), [Athena](https://docs.aws.amazon.com/athena/latest/ug/what-is.html)).  
+6. **SLO‑driven autoscale & guardrails**: scale on freshness/query p95/cache hit, not CPU; reject overload before meltdown ([SRE Handling Overload](https://sre.google/sre-book/handling-overload/)).
 
 ---
 
-## 8) Validation Plan (How I Prove It, Not Just Believe It)
+## 4) Why These Technologies (and the alternatives)
 
-- **T0–T8 test matrix** (env parity, ingest soak ≥1.3×, bursts 1×/3×/5×, query load, AZ/broker chaos, replay, completeness, cardinality guard, cost/SLO scaling).
-- **Realistic data shape** in load gen (labels + exponential histograms).
-- **User‑boundary oracles:** **write→read age histogram**, **ingest TTFB**, **query duration** SLOs, **cache hit**, **object‑store ops/query**, and **producer sent vs indexed**.
-- **Pass/fail gates to ship:** T1, T3, T4, T5 are hard gates; others are fix‑forward with mitigations documented.
+### Agents & Edge
+- **Node Exporter** (host) + **custom gameplay exporter** (SLIs): standard Prom model; portable; low overhead ([Node Exporter](https://github.com/prometheus/node_exporter)).  
+- **ADOT Collector** (agent): batching, retry, TLS, Prom remote_write; managed distro alignment ([ADOT](https://aws-otel.github.io/docs/getting-started/collector)).  
+- **Fluent Bit** (logs): lightweight, back‑pressure aware; ships to Firehose/S3/OpenSearch ([Fluent Bit](https://docs.fluentbit.io/)).  
+- **WireGuard** (overlay): fast, simple crypto mesh; isolates tenant traffic ([WireGuard](https://www.wireguard.com/)).
 
----
+**Why not ship raw events?** Per‑event metrics explode cardinality & cost; histograms preserve p95/p99 with bounded series ([Prom Histograms](https://prometheus.io/docs/practices/histograms/)).
 
-## 9) On Golden Images & Firecracker (Why They Matter Here)
+### Transport & Buffering
+- **Kinesis Data Streams** (or **MSK**) buffers, smooths bursts, and enables replay/outage isolation ([Kinesis](https://docs.aws.amazon.com/streams/latest/dev/introduction.html)).  
+- **Kinesis Firehose** routes logs to OpenSearch (hot) and S3 (archive) without managing consumers ([Firehose](https://docs.aws.amazon.com/firehose/latest/dev/what-is-this-service.html)).
 
-- **Golden images** (with exporters/ADOT/Fluent Bit baked, hardening, SBOM, signatures) make boots **deterministic** and **fast**, remove “works‑on‑my‑box” config drift, and give **image‑ID rollbacks**.
-- **Firecracker microVM sidecars** provide **VM‑grade isolation** for telemetry agents on hot hosts with near‑container footprint; this keeps **game CPU headroom** predictable and **reduces noise/blast radius**.
-- Both are aligned with “**cattle, not pets**” and are pivotal to achieving **high availability** targets.
+### Metrics Store (two paths)
+- **Amazon Managed Service for Prometheus (AMP)**: managed PromQL TSDB; no cluster ops; integrates with AMG & IAM ([AMP](https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-AWS-Managed-Prometheus.html)).  
+- **Grafana Mimir on EKS + S3**: stronger multi‑tenancy knobs and cost control; more to operate ([Mimir](https://grafana.com/docs/mimir/latest/)).
 
----
+### Logs & Traces
+- **Amazon OpenSearch Service** (hot 3–7 d + UltraWarm/Cold): query hot logs quickly; ILM for cost ([OpenSearch](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/what-is.html)).  
+- **S3 + Glue + Athena**: long‑term log/metrics archives; cheap analytics ([S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/Welcome.html), [Glue](https://docs.aws.amazon.com/glue/latest/dg/what-is-glue.html), [Athena](https://docs.aws.amazon.com/athena/latest/ug/what-is.html)).  
+- **AWS X‑Ray** or **Grafana Tempo** (optional) for traces ([X‑Ray](https://docs.aws.amazon.com/xray/latest/devguide/aws-xray.html), [Tempo](https://grafana.com/oss/tempo/)).
 
-## 10) Why This Is Sensible For 1M‑CCU Scale
+### Visualization & Alerting
+- **Amazon Managed Grafana (AMG)**: dashboards, SSO/RBAC, alert rules; supports AMP/OpenSearch/Athena ([AMG](https://docs.aws.amazon.com/grafana/latest/userguide/what-is-Amazon-Managed-Grafana.html)).  
+- **CloudWatch Alarms**: platform SLO/burn rate/freshness; integrates with **PagerDuty/Slack/AWS Chatbot** ([CloudWatch Alarms](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/AlarmThatSendsEmail.html), [AWS Chatbot](https://docs.aws.amazon.com/chatbot/latest/adminguide/what-is.html)).
 
-- The design directly reflects the **math of the load** (EPS, bytes/day), confines cardinality at the **edge**, and turns risk into **explicit SLOs** that drive scaling and cost.
-- It keeps operators effective under stress: **snappy dashboards**, **clear freshness** signal, **standard triage** (Golden Signals), and **recording rules** for fast reads.
-- It remains **portable** and **auditable**: PromQL, object‑store blocks, IaC, signed images, and WORM audit trails.
+### Security, Identity, and Governance
+- **IAM least privilege**, **KMS per env**, **mTLS** (SPIFFE/SPIRE optional), **SSM Session Manager**, **ACM certs**, **CloudTrail to S3 Object‑Lock** (WORM) ([IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html), [SPIFFE/SPIRE](https://spiffe.io/), [SSM Session Manager](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html), [CloudTrail + Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html)).  
+- **Config, Security Hub, GuardDuty, Access Analyzer** for continuous posture ([Config](https://docs.aws.amazon.com/config/latest/developerguide/WhatIsConfig.html), [Security Hub](https://docs.aws.amazon.com/securityhub/latest/userguide/what-is-securityhub.html), [GuardDuty](https://docs.aws.amazon.com/guardduty/latest/ug/what-is-guardduty.html)).
 
----
+### Golden Images & Supply Chain
+- **Packer** (golden AMIs) + **cloud-init** + **systemd**: immutable, fast boots; deterministic rollouts ([Packer](https://developer.hashicorp.com/packer)).  
+- **cosign/sigstore** for signing/attestations; **Syft/Grype** for SBOM & vuln scan ([cosign](https://docs.sigstore.dev/cosign/overview/), [Syft/Grype](https://github.com/anchore/syft)).  
+- **IMDSv2‑only**, **SSH disabled** (SSM only) ([IMDSv2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html)).
 
-## 11) Sources I Leaned On (At a High Level)
-
-- **AWS** official docs & reference architectures for AMP/AMG, OpenSearch, Kinesis/Firehose, VPC endpoints, KMS/IAM/SSM/Shield/WAF, S3 lifecycle.
-- **Prometheus/Grafana** guidance on histograms, naming & cardinality, recording rules, Mimir architecture.
-- **Google SRE** books & workbook (Golden Signals, managing load/overload, monitoring distributed systems).
-- **Brendan Gregg** (USE method; Systems Performance 2e) for resource analysis, multi‑tenant controls, and kernel networking insights.
-- **Internal security baselines** (SOC2/ISO 27001 aligned), and our **Design‑Notes.md** link pack.
-
-> These are not copied verbatim; they served as **principled guardrails** to shape a design that is testable, operable, and secure.
-
----
-
-## 12) What Would Change My Mind (Assumptions to Revisit)
-
-- **Different load shape:** materially higher series/server or incident cadence → revisit EPS/cost math and the streaming tier.
-- **Strict residency/BYOK per tenant:** favor Mimir on EKS with **per‑tenant KMS keys** and stricter isolation.
-- **Heavier tracing/APM needs:** consider managed APM or Tempo at day‑1; revisit cost of trace storage.
-- **Cross‑cloud portability mandate:** invest in **Mimir + Tempo** and multi‑cloud object‑stores; reduce reliance on managed regional services.
-- **PII in metrics** (should not happen): immediate schema change + re‑tokenize at edge + purge pipeline with audit proof.
+### Optional Enhancements
+- **Cilium + Hubble** for L3–L7 flow visibility on EKS; **eBPF/XDP** summaries for kernel‑level truth ([Cilium](https://docs.cilium.io/en/stable/), [Hubble](https://docs.cilium.io/en/stable/overview/intro/#hubble)).  
+- **Firecracker** microVM sidecar for agent isolation on hot hosts ([Firecracker](https://github.com/firecracker-microvm/firecracker)).
 
 ---
 
-## 13) TL;DR
+## 5) Retention & Cost Strategy (Why tiering and how)
 
-I chose a **PromQL‑compatible, object‑store‑backed, SLO‑driven, managed‑first** stack with **edge‑bounded cardinality**, **durable buffering**, **golden images**, and optional **Firecracker isolation**. The choices map directly to the quantified load and are **validated by an explicit T0–T8 test plan**. Security and cost controls are baked in from the start, and portability is preserved via open formats and IaC.
+- **Metrics**: hot 10s for **7–14 d** (AMP/Mimir); warm **1–5 m** rollups for **90–180 d**; cold **Parquet/ORC on S3** for ~13 months. Refs: Prometheus recording rules ([Recording Rules](https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/)), Mimir compactor/bucket‑index ([Mimir Compactor](https://grafana.com/docs/mimir/latest/references/architecture/components/compactor/)).  
+- **Logs**: **OpenSearch hot** 3–7 d → **UltraWarm/Cold** → **S3** archive via Firehose/ILM ([OpenSearch UltraWarm/Cold](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ultrawarm.html)).  
+- **Lifecycle**: S3 transitions to IA/Glacier + expirations ([S3 Lifecycle](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html)).  
+- **Cost controls**: result caching, query budgeting, downsampling pipelines (Glue/Lambda), ILM policies. Refs: Mimir query sharding/caching ([Mimir Query Frontend](https://grafana.com/docs/mimir/latest/references/architecture/components/query-frontend/)).
+
+---
+
+## 6) Capacity Validation & “Prove‑It” Gates (How we know it scales)
+
+- **Synthetic ingest soak**: ≥ **200k samples/s global** for 2–6 h; zero loss; write→read p95 < 30 s.  
+- **Burst drills**: 1×/3×/5× spikes (patch/match); backlog drains < 30 min; gameplay SLIs intact.  
+- **Query load**: ~200 concurrent viewers; p95 ≤ 2 s (≤12 h); p99 ≤ 10 s (7–30 d); cache hit ≥ 80%.  
+- **Chaos**: Kill one AZ’s ingesters/queriers or a broker; no data loss; freshness recovers < 2 min.  
+- **Replay**: Pause stream partitions 10–20 m; clean catch‑up; no out‑of‑order blowups.  
+- **Autoscaling** on **freshness/query p95/cache hit** (not CPU).  
+Refs: SRE on overload management ([SRE Book](https://sre.google/sre-book/handling-overload/)), Kafka/Kinesis tuning ([MSK Perf](https://docs.aws.amazon.com/msk/latest/developerguide/optimizing-your-amazon-msk-cluster.html)).
+
+---
+
+## 7) Security & Compliance Reasoning (Why these controls)
+
+- **PII‑free metrics** by schema; **edge tokenization** for logs; **mTLS everywhere**; **KMS at rest**; **least privilege IAM**. Refs: [AWS Well‑Architected](https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html), [CIS Benchmarks](https://www.cisecurity.org/cis-benchmarks/).  
+- **Auditability**: CloudTrail → **S3 Object‑Lock (WORM)**; Config + Security Hub posture; quarterly access reviews. Refs: [CloudTrail](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-user-guide.html), [Object Lock](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html).  
+- **Golden images** + signatures + SBOMs ⇒ provenance and drift‑free fleet. Refs: [cosign](https://docs.sigstore.dev/cosign/overview/), [Syft/Grype](https://github.com/anchore/syft).
+
+---
+
+## 8) Trade‑offs Considered (What we didn’t choose and why)
+
+- **Managed (AMP/AMG/OpenSearch) vs self‑managed (Mimir/Tempo/Elastic)**: Start managed to reduce undifferentiated ops; switch to self‑managed only when multi‑tenancy knobs or cost controls demand it.  
+- **Kinesis vs MSK**: Kinesis for turnkey scaling/replay; MSK if Kafka ecosystem/connectors are strategic.  
+- **Per‑event metrics vs histograms**: rejected per‑event due to cardinality and cost; histograms preserve tail accuracy.  
+- **Per‑tenant KMS keys (BYOK)**: optional; adopt for regulated studios/projects that require cryptographic segregation.
+
+---
+
+## 9) References (Primary Sources)
+
+- **Google SRE Book**: Monitoring, handling overload, SLOs  
+  - https://sre.google/sre-book/monitoring-distributed-systems/  
+  - https://sre.google/sre-book/handling-overload/
+- **Prometheus**: Histograms, naming/cardinality, recording rules, storage model  
+  - https://prometheus.io/docs/practices/histograms/  
+  - https://prometheus.io/docs/practices/naming/  
+  - https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/  
+  - https://prometheus.io/docs/prometheus/latest/storage/
+- **OpenTelemetry**: Exponential histograms  
+  - https://opentelemetry.io/docs/specs/otel/metrics/data-model/#exponential-histogram
+- **Grafana Mimir**: Architecture, store‑gateway, compactor, query‑frontend  
+  - https://grafana.com/docs/mimir/latest/references/architecture/  
+  - https://grafana.com/docs/mimir/latest/references/architecture/components/store-gateway/  
+  - https://grafana.com/docs/mimir/latest/references/architecture/components/compactor/  
+  - https://grafana.com/docs/mimir/latest/references/architecture/components/query-frontend/
+- **AWS Managed Prometheus (AMP)** & **Managed Grafana (AMG)**  
+  - https://docs.aws.amazon.com/prometheus/latest/userguide/what-is-AWS-Managed-Prometheus.html  
+  - https://docs.aws.amazon.com/grafana/latest/userguide/what-is-Amazon-Managed-Grafana.html
+- **Kinesis / Firehose / MSK**  
+  - https://docs.aws.amazon.com/streams/latest/dev/introduction.html  
+  - https://docs.aws.amazon.com/firehose/latest/dev/what-is-this-service.html  
+  - https://docs.aws.amazon.com/msk/latest/developerguide/what-is-msk.html
+- **OpenSearch Service** (UltraWarm/Cold)  
+  - https://docs.aws.amazon.com/opensearch-service/latest/developerguide/what-is.html  
+  - https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ultrawarm.html
+- **S3 + Lifecycle + Athena + Glue**  
+  - https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lifecycle-mgmt.html  
+  - https://docs.aws.amazon.com/athena/latest/ug/what-is.html  
+  - https://docs.aws.amazon.com/glue/latest/dg/what-is-glue.html
+- **Security & Compliance**: IAM, KMS, ACM, SSM, CloudTrail Object‑Lock, Config, Security Hub, GuardDuty  
+  - https://docs.aws.amazon.com/IAM/latest/UserGuide/introduction.html  
+  - https://docs.aws.amazon.com/kms/latest/developerguide/overview.html  
+  - https://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html  
+  - https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html  
+  - https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-lock.html  
+  - https://docs.aws.amazon.com/config/latest/developerguide/WhatIsConfig.html  
+  - https://docs.aws.amazon.com/securityhub/latest/userguide/what-is-securityhub.html  
+  - https://docs.aws.amazon.com/guardduty/latest/ug/what-is-guardduty.html
+- **Golden images & supply chain**: Packer, cosign/sigstore, Syft/Grype  
+  - https://developer.hashicorp.com/packer  
+  - https://docs.sigstore.dev/cosign/overview/  
+  - https://github.com/anchore/syft
+- **Optional**: Cilium/Hubble, Firecracker  
+  - https://docs.cilium.io/en/stable/  
+  - https://github.com/firecracker-microvm/firecracker
+- **Brendan Gregg**: USE method; _Systems Performance_ 2e  
+  - https://www.brendangregg.com/usemethod.html  
+  - https://www.brendangregg.com/systems-performance-2nd-edition-book.html
+
+---
+
+## 10) Summary (Tie‑back)
+
+The recommendation prioritizes **bounded cardinality, managed services where wise, object‑store economics, and SLO‑driven operations**. Each element is grounded in vendor documentation and SRE best practices, with explicit scaling gates (T0–T8) that convert assumptions into **measurable** acceptance criteria. The result: a platform that is **fast enough to see reality**, **robust enough to survive events**, and **simple enough to operate at 1M CCU**.
