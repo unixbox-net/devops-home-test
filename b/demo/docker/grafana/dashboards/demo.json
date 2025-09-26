@@ -1,0 +1,62 @@
+{
+  "title": "Demo App & Blackbox",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "App up (probe_success)",
+      "id": 1,
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "expr": "probe_success{job=\"blackbox-http\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeSeries",
+      "title": "Probe duration (s)",
+      "id": 2,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "targets": [
+        {
+          "expr": "probe_duration_seconds{job=\"blackbox-http\"}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeSeries",
+      "title": "App scrape time (s)",
+      "id": 3,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "targets": [
+        {
+          "expr": "scrape_duration_seconds{job=\"app\"}",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "schemaVersion": 36,
+  "version": 1
+}
