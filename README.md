@@ -71,11 +71,10 @@
 ---
 
 ## Document Control
-- **Owner:** Anthony Carpenter  
+- **Owner:** Anthony
 - **Version / Date:** v1.0 — 2025‑09‑24  
 - **Stakeholders:** Customer X  
-- **Reviewers / Approvers:** Daniel Fox / Tom  
-- **Related Docs:** _(add links)_
+- **Reviewers / Approvers:** Daniel / Tom  
 
 ---
 
