@@ -1,7 +1,5 @@
 # DevOps Take-Home — Repository Guide
 
-This README provides an ordered **Table of Contents** for the entire repository and maps each question to its corresponding answer file. 
-
 ## Top-Level Index
 
 - [devops-take-home-test.pdf](devops-take-home-test.pdf)
