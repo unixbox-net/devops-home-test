@@ -11,7 +11,7 @@ This document summarizes the colored spreadsheet of shard/region metrics across 
 
 ## Table of Contents
 - [1) Assumptions & Data Model (Working Hypotheses)](#1-assumptions--data-model-working-hypotheses)
-- [2) Initial Read — “Your Logical Guess”](#2-initial-read)
+- [2) Initial Read](#2-initial-read)
 - [3) Big Picture](#3-big-picture)
 - [4) How `avg` is computed (empirical)](#4-how-avg-is-computed-empirical)
 - [5) Period‑by‑Period Notes](#5-period-by-period-notes)
