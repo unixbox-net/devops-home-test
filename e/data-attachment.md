@@ -1,10 +1,34 @@
-# Shard Performance Summary (Europa → Kallichore)
+
+# Shard Performance Report (Europa → Kallichore)
 
 This document summarizes the colored spreadsheet of shard/region metrics across **Periods 3, 4, and 5**. Treat column names (Europa, Ganymede, Callisto, Phobos, Amalthea, Kallichore) as **game shards/realms**, and the rows `eu1 / us1 / us2 / ap1` as **regions/PoPs**.
 
 **Direction:** Lower values are better for all per‑region cells and for `avg`.  
 **stdev:** Within‑period time‑series variability (not the cross‑region spread).  
 **vol:** Total load for the shard in the period (sessions/matches/requests).
+
+---
+
+## Table of Contents
+- [1) Big Picture](#1-big-picture)
+- [2) How `avg` is computed (empirical)](#2-how-avg-is-computed-empirical)
+- [3) Period‑by‑Period Notes](#3-period-by-period-notes)
+  - [Period 3 (peach)](#period-3-peach)
+  - [Period 4 (purple)](#period-4-purple)
+  - [Period 5 (green, latest)](#period-5-green-latest)
+- [4) Region Breakdown (Period 5)](#4-region-breakdown-period-5)
+- [5) Shard Breakdown (Period 5)](#5-shard-breakdown-period-5)
+  - [Europa](#europa)
+  - [Ganymede](#ganymede)
+  - [Callisto](#callisto)
+  - [Phobos](#phobos)
+  - [Amalthea](#amalthea)
+  - [Kallichore](#kallichore)
+- [6) What’s Working / Not Working (Period 5)](#6-whats-working--not-working-period-5)
+- [7) Recommended Follow‑Ups](#7-recommended-follow-ups)
+- [8) Appendix — Exact Bias Tables](#8-appendix--exact-bias-tables)
+- [9) Assumptions & Data Model (Working Hypotheses)](#9-assumptions--data-model-working-hypotheses)
+- [10) Initial Read — “Your Logical Guess”](#10-initial-read--your-logical-guess)
 
 ---
 
@@ -35,24 +59,25 @@ This document summarizes the colored spreadsheet of shard/region metrics across 
 
 ## 3) Period‑by‑Period Notes
 
-### Period 3 (peach block)
+### Period 3 (peach)
 - High `avg` and `stdev` across the board.
 - AP1 is already the highest region; US1 is the lowest.
 - Bias is smaller (~1.2–1.9), so `avg` is closer to the raw region sums.
 
-### Period 4 (purple block)
+### Period 4 (purple)
 - Clear improvement: `avg` roughly halves vs Period 3 for most shards.
 - Variability (`stdev`) narrows materially.
 - Period bias increases to ~3.0 (normalized sums drop more).
 
-### Period 5 (green block, latest)
+### Period 5 (green, latest)
 - Some regression vs Period 4 (higher `avg`, wider `stdev` for several shards).
 - **Region ordering persists:** US1 best → US2 → EU1 → AP1 worst.
 - **Volume spikes** (e.g., **Amalthea 500,495**, **Kallichore 330,540**) coincide with higher `avg` and/or `stdev` → **possible load sensitivity**.
 
 ---
 
-## 4) Region Breakdown (Period 5 averages across shards)
+## 4) Region Breakdown (Period 5)
+Average across shards (lower = better):
 - **US1:** 4.30 (best)
 - **US2:** 5.25
 - **EU1:** 7.38
@@ -155,4 +180,42 @@ This document summarizes the colored spreadsheet of shard/region metrics across 
 
 ---
 
-*End of report.*
+## 9) Assumptions & Data Model (Working Hypotheses)
+
+**Entities**
+- **Columns (Europa…Kallichore):** game shards/realms.
+- **Rows (eu1, us1, us2, ap1):** regions/PoPs reporting the shard’s KPI for the period.
+- **Periods (3, 4, 5):** sequential time buckets (e.g., releases/sprints/weeks).
+
+**Metrics**
+- **Directionality:** Lower is better for regional cells and `avg`.
+- **`avg` (aggregate):** `avg ≈ eu1 + us1 + us2 + ap1 − bias(period)` where bias is roughly:
+  - P3: ~1.8–1.9 (E/G/C/P), ~1.2 (A/K)
+  - P4: ~3.0 (±0.1)
+  - P5: ~3.2 (±0.1)
+  This likely represents SLA/baseline subtraction or normalization.
+- **`stdev`:** Within‑period time‑series variability (not cross‑region spread). High = spiky experience.
+- **`vol`:** Per‑shard total load in the period (sessions/matches/requests). Not used in `avg` math, but may correlate with higher `avg`/`stdev` under load.
+
+**Data Quality / Caveats**
+- `avg` is not a mean; summing regions without subtracting bias will overshoot.
+- Period 3 uses two slightly different biases (E/G/C/P vs A/K), so don’t reuse a single scalar for all columns.
+- Decimal precision is 0.1; rounding may introduce ±0.1 noise.
+
+---
+
+## 10) Initial Read — “Your Logical Guess”
+
+1) **There was a global improvement between Period 3 → 4**, likely a config/infra rollout (latency/error reductions, tighter variability).  
+2) **Period 5 shows partial regression under higher load**, especially on shards with heavier `vol` (e.g., **Amalthea 500k**, **Kallichore 331k**).  
+3) **Regional ordering is stable:** **US1 best** → US2 → EU1 → **AP1 worst**. Root causes for AP1 likely include routing/peering paths, capacity, instance type parity, or scrubbing/Anycast decisions.  
+4) **Shard‑specific hotspots:**  
+   - **Callisto** — highest `avg` and `stdev` in P5; AP1 (9.4) is the biggest contributor.  
+   - **Phobos** — high `stdev` in P5; AP1 (9.2) + general volatility.  
+   - **Amalthea** — very high `vol` with elevated EU1 (8.8); potential capacity/affinity skew.  
+5) **Operational interpretation:** Use **US1** as the golden baseline; drive AP1 parity. Treat **Period 4** levels as provisional SLO targets; alert on % deviations in P5+.
+
+**Quick validation checks you can run next**
+- Recompute `sum(regions) − avg` to confirm the per‑period bias.  
+- Plot `avg` vs `vol` to eyeball load sensitivity.  
+- Inspect P5 time series for Callisto/Phobos to identify spike patterns (tick overruns, GC, DB hotspots).
